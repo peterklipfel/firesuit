@@ -19,4 +19,6 @@ sudo juju bootstrap
 juju deploy zookeeper
 juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
 juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
+juju deploy cassandra
+juju deploy cs:precise/rabbitmq-server
 
