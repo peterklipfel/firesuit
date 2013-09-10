@@ -1,4 +1,4 @@
-$codename = cat /etc/lsb-release | grep CODENAME | cut -f2 -d'='
+codename=`cat /etc/lsb-release | grep CODENAME | cut -f2 -d'='`
 
 sudo apt-get -y install software-properties-common
 sudo add-apt-repository ppa:juju/stable
