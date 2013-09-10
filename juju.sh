@@ -14,6 +14,6 @@ mv environments.yaml ~/.juju/environments.yaml
 
 sudo juju bootstrap
 juju deploy zookeeper
-juju deploy -v --repository=~/charm/ local:storm stormmaster
-juju deploy -v --repository=~/charm/ local:storm stormworker
+juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
+juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
 
