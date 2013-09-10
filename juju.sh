@@ -8,3 +8,7 @@ sudo apt-get install juju-core lxc mongodb-server
 mkdir -p ~/charm/$codename
 git clone git@github.com:peterklipfel/storm_charm.git ~/charm/$codename/storm
 
+sed s/notsosecret/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ local.yaml > environments.yaml
+mkdir ~/.juju
+mv environments.yaml ~/.juju/environments.yaml
+
