@@ -16,7 +16,7 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "storm" % "storm" % "0.7.2" % "provided",
+  "storm" % "storm" % "0.8.2" % "provided",
   "org.clojure" % "clojure" % "1.4.0" % "provided",
   "org.twitter4j" % "twitter4j-core" % "2.2.6-SNAPSHOT",
   "org.twitter4j" % "twitter4j-stream" % "2.2.6-SNAPSHOT",
