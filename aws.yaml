@@ -22,7 +22,7 @@ environments:
     type: ec2
     admin-secret: notsosecret
     # globally unique S3 bucket name
-    control-bucket: juju-notsosecret
+    control-bucket: juju-notsounique
     # override if your workstation is running a different series to which you are deploying
     # default-series: precise
     # region defaults to us-east-1, override if required
