@@ -11,8 +11,9 @@
 #git clone git@github.com:peterklipfel/storm_charm.git ~/charm/precise/storm
 
 
-sed s/notsosecret/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ aws.yaml > aws.yaml
-sed s/notsouniqe/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ aws.yaml > environments.yaml
+sed s/notsosecret/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ aws.yaml > tmp.yaml
+sed s/notsounique/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ tmp.yaml > environments.yaml
+rm tmp.yaml
 #mkdir ~/.juju
 #mv environments.yaml ~/.juju/environments.yaml
 
