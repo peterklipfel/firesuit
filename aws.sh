@@ -12,8 +12,16 @@
 
 
 sed s/notsosecret/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ aws.yaml > tmp.yaml
-sed s/notsounique/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ tmp.yaml > environments.yaml
+sed s/notsounique/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ tmp.yaml > uniquified.yaml
 rm tmp.yaml
+echo "Type your amazon access key, followed by [ENTER]:"
+read access_key
+echo "Type your amazon secret key, followed by [ENTER]:"
+read secret_key
+sed s/youraccesskey/$access_key/ uniquified.yaml > tmp.yaml
+sed s/yoursecretkey/$secret_key/ tmp.yaml > environments.yaml
+rm tmp.yaml
+rm uniquified.yaml
 #mkdir ~/.juju
 #mv environments.yaml ~/.juju/environments.yaml
 
