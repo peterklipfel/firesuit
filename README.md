@@ -6,6 +6,10 @@ For Amazon
 ----------
 This will spin up a couple instances
 
+_This will be scripted soon_: in order to set up storm, after using the aws script, use `juju ssh` to ssh into the correct worker, and get the topology that you want to run.  In a test case, we used the zip file downloaded from https://github.com/peterklipfel/scala-storm-starter as our topology.  Then, to create the deployable jar, we ran `sbt assembly`.
+
+Then, to deploy the topology, we ran
+    /opt/storm/storm-0.8.1/bin/storm jar /home/ubuntu/scala-storm-starter-master/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar storm.starter.topology.ExclamationTopology ExclamationTopology
 
 _A framework for standing up big data applications_
 
