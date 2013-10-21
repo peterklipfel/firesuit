@@ -4,6 +4,7 @@ import backtype.storm.{ Config, LocalCluster, StormSubmitter }
 import backtype.storm.testing.TestWordSpout
 import backtype.storm.topology.TopologyBuilder
 import backtype.storm.utils.Utils
+import storm.starter.spout._
 
 object ExclamationTopology {
   def main(args: Array[String]) {
@@ -12,6 +13,7 @@ object ExclamationTopology {
     val builder: TopologyBuilder = new TopologyBuilder()
 
     builder.setSpout("word", new TestWordSpout(), 10)
+    builder.setSpout("rabbitmq", new RabbitMQSpout(), 10)
     builder.setBolt("exclaim", new ExclamationBolt(), 3).shuffleGrouping("word")
 
     val config = new Config()
