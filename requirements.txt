@@ -1,0 +1,4 @@
+Flask==0.10.1
+virtualenv==1.9.1
+six==1.4.1
+Flask-Restful==0.2.5
