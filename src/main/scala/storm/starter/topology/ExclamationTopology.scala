@@ -14,7 +14,7 @@ object ExclamationTopology {
     val builder: TopologyBuilder = new TopologyBuilder()
 
     builder.setSpout("word", new TestWordSpout(), 10)
-    builder.setSpout("rabbitmq", new AMQPSpout("localhost", 7654, "user1", "password", "test", new ExclusiveQueueWithBinding("random", "strings"), new AMQPScheme()), 10)
+    builder.setSpout("rabbitmq", new AMQPSpout("localhost", 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
     builder.setBolt("exclaim", new ExclamationBolt(), 3).shuffleGrouping("word")
 
     val config = new Config()
