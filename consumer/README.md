@@ -3,4 +3,4 @@ rabbit_flask
 
 RabbitMQ+Flask
 
-This will be included in the firesuit project
+This is included in the firesuit project which can be found at github.com:peterklipfel/firesuit
