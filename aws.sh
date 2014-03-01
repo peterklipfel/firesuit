@@ -10,6 +10,7 @@ mkdir -p ~/charm/precise
 git clone git@github.com:peterklipfel/storm_charm.git ~/charm/$codename/storm
 git clone git@github.com:peterklipfel/storm_charm.git ~/charm/precise/storm
 
+git clone git@github.com:peterklipfel/flask_charm.git ~/charm/precise/flask
 
 sed s/notsosecret/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ aws.yaml > tmp.yaml
 sed s/notsounique/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ tmp.yaml > uniquified.yaml
@@ -30,3 +31,8 @@ sudo juju bootstrap
 juju deploy zookeeper
 juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
 juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
+juju deploy -v --repository=/home/ubuntu/charm/ local:flask
+juju deploy rabbitmq-server
+juju deploy cassandra
+juju add-unit cassandra
+juju add-unit cassandra
