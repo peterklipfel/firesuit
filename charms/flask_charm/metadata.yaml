@@ -1,0 +1,17 @@
+name: flask
+summary: Flask is a lightweight "microframework" that is often used for simple apis
+maintainer: Ubuntu <Ubuntu@ip-172-31-24-81.us-west-2.compute.internal>
+description: |
+  The “micro” in microframework means Flask aims to keep the core simple but extensible. Flask won’t make many decisions for you, such as what database to use. Those decisions that it does make, such as what templating engine to use, are easy to change. Everything else is up to you, so that Flask can be everything you need and nothing you don’t.
+categories:
+  - misc
+subordinate: false
+provides:
+  provides-relation:
+    interface: http
+#requires:
+#  requires-relation:
+#    interface: interface-name
+peers:
+  peer-relation:
+    interface: rabbitmq

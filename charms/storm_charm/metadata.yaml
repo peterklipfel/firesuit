@@ -1,0 +1,18 @@
+name: storm
+summary: "The Storm Master/Worker Server"
+maintainer: "Maarten Ectors <maarten.ectors@canonical.com>"
+categories: ["misc"]
+description: |
+    Installs the Twitter Storm Master/ Worker Server. The Master server runs Nimbus and the UI. The Worker server runs Supervisor, Workers and DRPC. 
+provides:
+  master:
+    interface: storm
+peers:
+  coworker:
+    interface: storm
+requires:
+  zookeeper:
+    interface: zookeeper
+  worker:
+    interface: storm
+ 

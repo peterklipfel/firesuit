@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -e
+
+apt-get install -y python2.7 python-pip unzip build-essential gcc python-dev nginx
+
+wget https://github.com/peterklipfel/rabbit_flask/archive/master.zip
+unzip master.zip
+cd rabbit_flask-master
+pip install -r requirements.txt
+cd ..
+
+rm /etc/nginx/sites-enabled/default
+sed s/theipaddress/`ifconfig eth0 | grep "inet addr" | awk -F: '{print $2}' | awk '{print $1}'`/ nginx.conf > api_nginx.conf
+ln -s `pwd`/api_nginx.conf /etc/nginx/sites-enabled/api_nginx.conf
+
+scriptPath=`pwd`/checker.sh
+sed "s,injectScriptHere,$scriptPath," api_crontab > crontab
+crontab -u root `pwd`/crontab
+
+open-port 80/tcp
+
+
+
