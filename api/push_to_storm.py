@@ -3,7 +3,7 @@ import pika
 import sys
 
 connection = pika.BlockingConnection(pika.ConnectionParameters(
-        host='localhost'))
+        host='ec2-54-81-253-74.compute-1.amazonaws.com'))
 channel = connection.channel()
 
 channel.exchange_declare(exchange='direct_logs',

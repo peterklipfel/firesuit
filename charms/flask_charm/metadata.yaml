@@ -9,9 +9,10 @@ subordinate: false
 provides:
   provides-relation:
     interface: http
-#requires:
-#  requires-relation:
-#    interface: interface-name
-peers:
-  peer-relation:
+requires:
+  amqp:
     interface: rabbitmq
+#peers:
+#  peer-relation:
+#    interface: rabbitmq
+
