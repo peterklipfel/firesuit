@@ -7,7 +7,7 @@ categories:
   - misc
 subordinate: false
 provides:
-  provides-relation:
+  api:
     interface: http
 requires:
   amqp:
