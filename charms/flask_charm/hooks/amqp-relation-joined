@@ -1,3 +1,4 @@
+#!/bin/bash
 echo "DOING AMQP STUFF"
 juju-log "$JUJU_REMOTE_UNIT modified its settings"
 juju-log "Relation settings:"
