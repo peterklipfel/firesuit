@@ -61,6 +61,7 @@ def configure_amqp(username, vhost):
 
 
 def amqp_changed(relation_id=None, remote_unit=None):
+    open('/var/amqp_changed_touched_this_file', 'a').close()
     if not cluster.eligible_leader('res_rabbitmq_vip'):
         msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
         utils.juju_log('INFO', msg)
@@ -319,7 +320,7 @@ def update_nrpe_checks():
         rsync(os.path.join(os.getenv('CHARM_DIR'), 'scripts',
                            'check_rabbitmq.py'),
               os.path.join(NAGIOS_PLUGINS, 'check_rabbitmq.py'))
-    user = 'naigos'
+    user = 'nagios'
     vhost = 'nagios'
     password_file = os.path.join(RABBIT_DIR, '%s.passwd' % user)
     if os.path.exists(password_file):
