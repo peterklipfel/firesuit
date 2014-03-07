@@ -3,9 +3,7 @@
 # Note that currently this is run directly after install
 # i.e. 'service apache2 start'
 
-uwsgi --http :5000 --socket 127.0.0.1:3031 --wsgi-file `pwd`/rabbit_flask-master/api.py --callable app --processes 4 --threads 2 --stats 127.0.0.1:9191 --pidfile ./uwsgi.pid
+nohup uwsgi --http :5000 --socket 127.0.0.1:3031 --wsgi-file `pwd`/rabbit_flask-master/api.py --callable app --processes 4 --threads 2 --stats 127.0.0.1:9191 --pidfile ./uwsgi.pid &
 
 
-# This is a hack to make sure thatthings are up and running 
-sleep 100
 service nginx restart || service nginx start
