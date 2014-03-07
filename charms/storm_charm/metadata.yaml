@@ -15,4 +15,6 @@ requires:
     interface: zookeeper
   worker:
     interface: storm
+  amqp:
+    interface: rabbitmq
  
