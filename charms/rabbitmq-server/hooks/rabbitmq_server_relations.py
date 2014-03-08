@@ -36,6 +36,12 @@ def ensure_unison_rabbit_permissions():
 def install():
     pre_install_hooks()
     utils.install(*rabbit.PACKAGES)
+    os.system("wget http://www.rabbitmq.com/releases/rabbitmq-server/v3.2.4/rabbitmq-server_3.2.4-1_all.deb")
+    os.system("dpkg -i rabbitmq-server_3.2.4-1_all.deb")
+    os.system("mkdir /etc/rabbitmq/rabbitmq.conf.d")
+    rabbit.enable_plugin("rabbitmq_management")
+    utils.restart('rabbitmq-server')
+    utils.expose(15672)
     utils.expose(5672)
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
@@ -61,7 +67,6 @@ def configure_amqp(username, vhost):
 
 
 def amqp_changed(relation_id=None, remote_unit=None):
-    open('/var/amqp_changed_touched_this_file', 'a').close()
     if not cluster.eligible_leader('res_rabbitmq_vip'):
         msg = 'amqp_changed(): Deferring amqp_changed to eligible_leader.'
         utils.juju_log('INFO', msg)
@@ -344,22 +349,25 @@ def update_nrpe_checks():
     )
     nrpe_compat.write()
 
+MAN_PLUGIN = 'rabbitmq_management'
 
 def upgrade_charm():
     pre_install_hooks()
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
-    for f in [f for f in os.listdir('/var/lib/juju')
-              if os.path.isfile(os.path.join('/var/lib/juju', f))]:
-        if f.endswith('.passwd'):
-            s = os.path.join('/var/lib/juju', f)
-            d = os.path.join('/var/lib/rabbitmq', f)
-            utils.juju_log('INFO',
-                           'upgrade_charm: Migrating stored passwd'
-                           ' from %s to %s.' % (s, d))
-            shutil.move(s, d)
+    # os.system("rabbitmq-plugins enable rabbitmq_management")
+    # utils.restart('rabbitmq-server')
+    utils.juju_log('INFO', "!!!!finished upgrade!!!!")
+    # for f in [f for f in os.listdir('/var/lib/juju')
+    #           if os.path.isfile(os.path.join('/var/lib/juju', f))]:
+    #     if f.endswith('.passwd'):
+    #         s = os.path.join('/var/lib/juju', f)
+    #         d = os.path.join('/var/lib/rabbitmq', f)
+    #         utils.juju_log('INFO',
+    #                        'upgrade_charm: Migrating stored passwd'
+    #                        ' from %s to %s.' % (s, d))
+    #         shutil.move(s, d)
 
-MAN_PLUGIN = 'rabbitmq_management'
 
 
 def config_changed():
@@ -370,7 +378,7 @@ def config_changed():
         rabbit.enable_plugin(MAN_PLUGIN)
         utils.open_port(55672)
     else:
-        rabbit.disable_plugin(MAN_PLUGIN)
+        # rabbit.disable_plugin(MAN_PLUGIN)
         utils.close_port(55672)
 
     if utils.config_get('ssl_enabled') is True:
