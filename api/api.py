@@ -5,6 +5,7 @@ import json
 import pika
 import sys
 import logging
+import os
 
 logging.basicConfig()
 
