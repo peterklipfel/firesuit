@@ -43,6 +43,10 @@ def install():
     utils.restart('rabbitmq-server')
     utils.expose(15672)
     utils.expose(5672)
+    os.system("wget localhost:15672/cli/rabbitmqadmin")
+    os.system("chmod +x ./rabbitmqadmin")
+    os.system("mv rabbitmqadmin /usr/bin/")
+    os.system("rabbitmqadmin declare exchange name=stormExchange type=fanout")
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
     unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
@@ -355,18 +359,15 @@ def upgrade_charm():
     pre_install_hooks()
     # Ensure older passwd files in /var/lib/juju are moved to
     # /var/lib/rabbitmq which will end up replicated if clustered.
-    # os.system("rabbitmq-plugins enable rabbitmq_management")
-    # utils.restart('rabbitmq-server')
-    utils.juju_log('INFO', "!!!!finished upgrade!!!!")
-    # for f in [f for f in os.listdir('/var/lib/juju')
-    #           if os.path.isfile(os.path.join('/var/lib/juju', f))]:
-    #     if f.endswith('.passwd'):
-    #         s = os.path.join('/var/lib/juju', f)
-    #         d = os.path.join('/var/lib/rabbitmq', f)
-    #         utils.juju_log('INFO',
-    #                        'upgrade_charm: Migrating stored passwd'
-    #                        ' from %s to %s.' % (s, d))
-    #         shutil.move(s, d)
+    for f in [f for f in os.listdir('/var/lib/juju')
+              if os.path.isfile(os.path.join('/var/lib/juju', f))]:
+        if f.endswith('.passwd'):
+            s = os.path.join('/var/lib/juju', f)
+            d = os.path.join('/var/lib/rabbitmq', f)
+            utils.juju_log('INFO',
+                           'upgrade_charm: Migrating stored passwd'
+                           ' from %s to %s.' % (s, d))
+            shutil.move(s, d)
 
 
 

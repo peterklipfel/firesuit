@@ -4,11 +4,15 @@ from flask.ext.restful import reqparse, abort, Api, Resource
 import json
 import pika
 import sys
+import logging
+
+logging.basicConfig()
 
 app = Flask(__name__)
 api = Api(app)
 
 parser = reqparse.RequestParser()
+
 
 @app.route('/', methods=['POST'])
 # @crossdomain(origin='*')
@@ -16,7 +20,10 @@ def eatJson():
   try:
     if request.method == "POST":
       for blob in request.form:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+        connection = pika.BlockingConnection(
+          pika.ConnectionParameters(
+            host=(os.environ.get("RABBIT_IP") or "localhost"), 
+            port=5672))
         channel = connection.channel()
         channel.exchange_declare(exchange='direct_logs',
                                  type='direct')

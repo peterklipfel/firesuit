@@ -1,8 +1,3 @@
 #!/bin/bash
-echo "DOING AMQP STUFF"
-juju-log "$JUJU_REMOTE_UNIT modified its settings"
-juju-log "Relation settings:"
-relation-get
-juju-log "Relation members:"
-relation-list
-touch /var/i_was_here
+export RABBIT_IP=`relation-get hostname`
+touch `pwd`/firesuit-master/api/touch_to_reload
