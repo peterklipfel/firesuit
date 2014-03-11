@@ -1,4 +1,4 @@
 #!/bin/bash
 
-export RABBIT_IP=`relation-get hostname`
+python firesuit-master/api/set_config.py rabbitip `relation-get hostname`
 touch `pwd`/firesuit-master/api/touch_to_reload

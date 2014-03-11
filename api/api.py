@@ -5,6 +5,7 @@ import json
 import pika
 import sys
 import logging
+import yaml
 import os
 
 logging.basicConfig()
@@ -12,9 +13,14 @@ logging.basicConfig()
 app = Flask(__name__)
 api = Api(app)
 
+filePath = os.path.dirname(os.path.realpath(__file__))+'/.firesuit/config.yml'
+f = open(filePath)
+config = yaml.safe_load(f)
+f.close()
+
 parser = reqparse.RequestParser()
 
-HOST = os.environ.get("RABBIT_IP") or "localhost"
+HOST = config['rabbitip']
 
 @app.route('/', methods=['POST'])
 # @crossdomain(origin='*')
