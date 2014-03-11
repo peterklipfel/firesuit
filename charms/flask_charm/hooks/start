@@ -3,7 +3,7 @@
 # Note that currently this is run directly after install
 # i.e. 'service apache2 start'
 
-nohup uwsgi --http :5000 --socket 127.0.0.1:3031 --wsgi-file `pwd`/firesuit-master/api/api.py --touch-reload touch_to_reload --callable app --processes 4 --threads 2 --stats 127.0.0.1:9191 --pidfile ./uwsgi.pid &
+uwsgi --socket 127.0.0.1:3031 --wsgi-file `pwd`/firesuit-master/api/api.py --touch-reload `pwd`/firesuit-master/api/touch_to_reload --callable app --processes 4 --threads 2 --stats 127.0.0.1:9191 --daemonize /tmp/uwsgi.log --pidfile ./uwsgi.pid
 
 
 service nginx restart

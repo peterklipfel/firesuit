@@ -1,3 +1,4 @@
 #!/bin/bash
+
 export RABBIT_IP=`relation-get hostname`
 touch `pwd`/firesuit-master/api/touch_to_reload

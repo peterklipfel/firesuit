@@ -14,6 +14,7 @@ api = Api(app)
 
 parser = reqparse.RequestParser()
 
+HOST = os.environ.get("RABBIT_IP") or "localhost"
 
 @app.route('/', methods=['POST'])
 # @crossdomain(origin='*')
@@ -22,9 +23,7 @@ def eatJson():
     if request.method == "POST":
       for blob in request.form:
         connection = pika.BlockingConnection(
-          pika.ConnectionParameters(
-            host=(os.environ.get("RABBIT_IP") or "localhost"), 
-            port=5672))
+          pika.ConnectionParameters(host=(HOST), port=5672))
         channel = connection.channel()
         channel.exchange_declare(exchange='direct_logs',
                                  type='direct')
