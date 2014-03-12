@@ -4,8 +4,8 @@
 # description: storm daemon
 # processname: storm
 
-DAEMON_PATH="/opt/storm/storm-0.8.1/bin"
-LOG_PATH="/opt/storm/storm-0.8.1/logs"
+DAEMON_PATH="/opt/storm/apache-storm-0.9.1-incubating/bin"
+LOG_PATH="/opt/storm/apache-storm-0.9.1-incubating/logs"
 DAEMON=$DAEMON_PATH/storm
 
 NAME=storm
@@ -24,7 +24,7 @@ start)
 	printf "%-50s" "Starting $NAME..."
 
 	cd $DAEMON_PATH
-	if [ -f /opt/storm/storm-0.8.1/conf/master ]; then
+	if [ -f /opt/storm/apache-storm-0.9.1-incubating/conf/master ]; then
 		daemon --name="storm-nimbus" --user=storm --pidfile=$PIDFILE -- $DAEMON $NIMBUS		
 		daemon --name="storm-ui" --user=storm  --pidfile=$UIPIDFILE -- $DAEMON $UI	
 	else
@@ -56,7 +56,7 @@ stop)
 
             cd $DAEMON_PATH
         if [ -f $PIDFILE ]; then
-	    if [ -f /opt/storm/storm-0.8.1/conf/master ]; then
+	    if [ -f /opt/storm/apache-storm-0.9.1-incubating/conf/master ]; then
             	daemon --pidfile=$PIDFILE --name="storm-nimbus"  --stop
 	    else
             	daemon --pidfile=$PIDFILE --name="storm-supervisor"  --stop
