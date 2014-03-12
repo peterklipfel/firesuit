@@ -17,4 +17,6 @@ requires:
     interface: storm
   amqp:
     interface: rabbitmq
+  cql:
+    interface: cassandra
  

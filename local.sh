@@ -25,12 +25,17 @@ codename=`cat /etc/lsb-release | grep CODENAME | cut -f2 -d'='`
 # mkdir ~/.juju
 # mv environments.yaml ~/.juju/environments.yaml
 
-juju switch local
+# juju switch local
 
-sudo juju bootstrap
+# sudo juju bootstrap
 juju deploy zookeeper
 juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
 juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
-juju deploy cassandra
-juju deploy cs:precise/rabbitmq-server
+# juju deploy cassandra
+# juju deploy cs:precise/rabbitmq-server
 
+juju add-relation stormmaster zookeeper
+juju add-relation stormworker zookeeper
+juju add-relation stormmaster:master stormworker:worker
+juju expose stormmaster
+juju expose stormworker
