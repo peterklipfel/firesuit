@@ -1,0 +1,45 @@
+#!/bin/bash
+
+case $COMMAND in
+  monitor)
+    watch juju status
+    ;;
+  load)
+    cp -r charms/storm_charm/* $HOME/charm/precise/storm/
+    cp -r charms/cassandra_charm/* $HOME/charm/precise/cassandra/
+    cp -r charms/rabbitmq-server/* $HOME/charm/precise/rabbitmq/
+    cp -r charms/flask_charm/* $HOME/charm/precise/flask/
+    ;;
+  preload)
+    mkdir -p charms/storm_charm
+    mkdir charms/cassandra_charms
+    mkdir charms/rabbitmq-server
+    mkdir charms/flask_charm
+    ;;
+  deploy)
+    juju deploy zookeeper
+    juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
+    juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
+    juju deploy -v --repository=/home/$USER/charm/ local:rabbitmq-server
+    juju deploy -v --repository=/home/$USER/charm/ local:flask
+    juju deploy -v --repository=/home/$USER/charm/ local:cassandra
+    juju add-unit cassandra
+    ;;
+  bind-storm)
+    juju add-relation stormmaster zookeeper
+    juju add-relation stormworker zookeeper
+    juju add-relation stormmaster:master stormworker:worker
+    juju add-relation stormmaster rabbitmq
+    juju add-relation stormmaster cassandra
+    ;;
+  bind-flask)
+    juju add-relation rabbitmq flask
+    ;;
+  bind-cassandra)
+    ;;
+  log)
+    if [[ `juju status | grep environment | cut -d ' ' -f2` == local ]]; then
+      tail -f $HOME/.juju/local/log/*
+    else
+      juju debug-log
+    fi
