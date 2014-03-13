@@ -23,7 +23,8 @@ libraryDependencies ++= Seq(
   "org.twitter4j" % "twitter4j-stream" % "2.2.6-SNAPSHOT",
   "org.specs2" %% "specs2" % "1.11" % "test",
   "com.datastax.cassandra" % "cassandra-driver-core" % "1.0.3",
-  "com.yammer.metrics" % "metrics-core" % "2.2.0"
+  "com.yammer.metrics" % "metrics-core" % "2.2.0",
+  "org.yaml" % "snakeyaml" % "1.8"
   // "javax.servlet" % "servlet-api" % "2.5-20081211" intransitive
 )
 

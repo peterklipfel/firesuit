@@ -16,11 +16,16 @@ public class CassandraRawStorer extends BaseRichBolt {
     private static final Logger log = Logger.getLogger(CassandraRawStorer.class);
     private boolean connected = false;
     private BoundStatementsClient client;
+    private final String ip;
+
+    public CassandraRawStorer(String ip) {
+        this.ip = ip;
+    }
 
     @Override
     public void prepare(Map conf, TopologyContext context, OutputCollector collector) {
         client = new BoundStatementsClient();
-        client.connect("127.0.0.1");
+        client.connect(this.ip);
         _collector = collector;
     }
 
