@@ -25,10 +25,12 @@ case $COMMAND in
     juju deploy -v --repository=/home/$USER/charm/ local:cassandra
     juju add-unit cassandra
     ;;
-  bind-storm)
+  bind-storm-internal)
     juju add-relation stormmaster zookeeper
     juju add-relation stormworker zookeeper
     juju add-relation stormmaster:master stormworker:worker
+    ;;
+  bind-storm-external)
     juju add-relation stormmaster rabbitmq
     juju add-relation stormmaster cassandra
     ;;
