@@ -1,14 +1,44 @@
 #!/bin/bash
 
-case $COMMAND in
+mkdir -p $HOME/.firesuit
+touch $HOME/.firesuit/previous_log_check
+
+copy_local_charms (){
+  cp -r charms/storm_charm/* $HOME/charm/precise/storm/
+  cp -r charms/cassandra_charm/* $HOME/charm/precise/cassandra/
+  cp -r charms/rabbitmq-server/* $HOME/charm/precise/rabbitmq/
+  cp -r charms/flask_charm/* $HOME/charm/precise/flask/
+}
+
+deploy_storm () {
+  juju deploy zookeeper
+  juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
+  juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
+}
+
+deploy_rabbitmq () {
+  juju deploy -v --repository=/home/$USER/charm/ local:rabbitmq-server  
+}
+
+deploy_cassandra () {
+  juju deploy -v --repository=/home/$USER/charm/ local:cassandra
+  juju add-unit cassandra
+  env=`juju status | grep environment | cut -d ' ' -f2`
+  if [[ $env != local ]]; then
+    juju add-unit cassandra
+  fi
+}
+
+deploy_flask () {
+  juju deploy -v --repository=/home/$USER/charm/ local:flask
+}
+
+case $1 in
   monitor)
     watch juju status
     ;;
   load)
-    cp -r charms/storm_charm/* $HOME/charm/precise/storm/
-    cp -r charms/cassandra_charm/* $HOME/charm/precise/cassandra/
-    cp -r charms/rabbitmq-server/* $HOME/charm/precise/rabbitmq/
-    cp -r charms/flask_charm/* $HOME/charm/precise/flask/
+    copy_local_charms
     ;;
   preload)
     mkdir -p charms/storm_charm
@@ -16,14 +46,28 @@ case $COMMAND in
     mkdir charms/rabbitmq-server
     mkdir charms/flask_charm
     ;;
+  predeploy)
+    echo "setting up environment"
+    juju bootstrap
+    ;;
   deploy)
-    juju deploy zookeeper
-    juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
-    juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
-    juju deploy -v --repository=/home/$USER/charm/ local:rabbitmq-server
-    juju deploy -v --repository=/home/$USER/charm/ local:flask
-    juju deploy -v --repository=/home/$USER/charm/ local:cassandra
-    juju add-unit cassandra
+    copy_local_charms
+    deploy_storm
+    deploy_rabbitmq
+    deploy_cassandra
+    deploy_flask
+    ;;
+  deploy-storm)
+    deploy_storm
+    ;;
+  deploy-rabbitmq)
+    deploy_rabbitmq
+    ;;
+  deploy-cassandra)
+    deploy_cassandra
+    ;;
+  deploy-flask)
+    deploy_flask
     ;;
   bind-storm-internal)
     juju add-relation stormmaster zookeeper
@@ -37,10 +81,20 @@ case $COMMAND in
   bind-flask)
     juju add-relation rabbitmq flask
     ;;
-  log)
-    if [[ `juju status | grep environment | cut -d ' ' -f2` == local ]]; then
+  show-logs)
+    env=`juju status | grep environment | cut -d ' ' -f2`
+    if [[ $env == local ]]; then
       tail -f $HOME/.juju/local/log/*
     else
       juju debug-log
     fi
     ;;
+  destroy-all)
+    env=`juju status | grep environment | cut -d ' ' -f2`
+    if [[ $env == local ]]; then
+      sudo juju destroy-environment
+    else
+      juju destroy-environment
+    fi
+    ;;
+esac
