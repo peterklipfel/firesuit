@@ -37,11 +37,10 @@ case $COMMAND in
   bind-flask)
     juju add-relation rabbitmq flask
     ;;
-  bind-cassandra)
-    ;;
   log)
     if [[ `juju status | grep environment | cut -d ' ' -f2` == local ]]; then
       tail -f $HOME/.juju/local/log/*
     else
       juju debug-log
     fi
+    ;;
