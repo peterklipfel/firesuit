@@ -330,6 +330,15 @@ case $COMMAND in
         configure_storm_base
         deploy_firesuit
         ;;
+    amqp-relation-joined)
+        $rabbitip=`relation-get hostname`
+        echo "rabbitip: $rabbitip" >> /var/firesuit/config.yml
+        ;;
+    database-relation-joined)
+        $cassandraip=`relation-get private-address`
+        echo "cassandraip: $cassandraip" >> /var/firesuit/config.yml
+        start_firesuit
+        ;;
     worker-relation-joined)
         # do nothing
         ;;

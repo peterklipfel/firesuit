@@ -1,4 +1,453 @@
 #!/bin/bash
+	 
+set -e
+	 
+private_address=`unit-get private-address`
+	 
+configure_hosts () {
+	    # This is a horrible hack to ensure that 
+	    # Java can resolve the hostname of the server to its
+	    # real IP address.
+	 
+	    # Fixup stuff in lxc containers
+	    hostname=`hostname`
+	    grep -q "^127.0.0.1.*$hostname" /etc/hosts &&
+		sed -i -e "s/^\(127.0.0.1 .*\)$hostname/\1/" /etc/hosts &&
+		echo "$private_address $hostname" >> /etc/hosts
+	 
+	    # only necessary on oneiric but shouldn't break anything elsewhere
+	    hostname=`hostname -f`
+	    sed -i -e "s/^127.0.1.1\(.*$hostname.*\)/$private_address\1/" /etc/hosts
+}
+	 
 
-python firesuit-master/api/set_config.py cassandraip `relation-get private-address`
-touch `pwd`/firesuit-master/api/touch_to_reload
+	 
+install_base_packages () {
+
+    juju-log "Installing storm..."
+
+	juju-log "Setting app directory"
+	juju-log $CHARM_DIR
+	juju-log "Installing the dependencies for nimbus - zeromq"
+	cd /opt
+	mkdir storm
+	cd storm
+	juju-log "Installing the dependencies for nimbus - jdk 7, python 2.6, unzip"
+	apt-get install -y python
+	apt-get install -y unzip
+	apt-get install -y gcc
+	apt-get install -y g++
+	apt-get install -y uuid-dev
+	apt-get install -y make
+	apt-get install -y openjdk-7-jdk
+	apt-get install -y pkg-config
+	apt-get install -y libtool
+	apt-get install -y automake
+	apt-get install -y autoconf
+	apt-get install -y daemon
+	wget http://download.zeromq.org/zeromq-2.1.7.tar.gz
+	sha1sum -c $CHARM_DIR/zeromq-2.1.7.tar.gz.sha1
+	tar -xzf zeromq-2.1.7.tar.gz
+	cd zeromq-2.1.7
+	./configure
+	make
+	make install
+	cd ..
+	juju-log "Installing the dependencies for nimbus - jzmq"
+    # forked because github failed to serve the original too many times
+	git clone https://github.com/peterklipfel/jzmq.git
+	cd jzmq
+	cd src
+	touch classdist_noinst.stamp
+	CLASSPATH=.:./.:$CLASSPATH javac -d . org/zeromq/ZMQ.java org/zeromq/ZMQException.java org/zeromq/ZMQQueue.java org/zeromq/ZMQForwarder.java org/zeromq/ZMQStreamer.java
+	cd ..
+	./autogen.sh
+	export JAVA_HOME=$(readlink -f /usr/bin/javac | sed "s:/bin/javac::")
+	export PATH=$PATH:$JAVA_HOME/bin
+	./configure
+	make
+	make install
+	cd ..
+	juju-log "Installing the dependencies for nimbus - storm 0.9.1-incubating"
+
+	wget http://mirrors.ibiblio.org/apache/incubator/storm/apache-storm-0.9.1-incubating/apache-storm-0.9.1-incubating.zip
+	unzip apache-storm-0.9.1-incubating.zip
+	cp $CHARM_DIR/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tpl
+	groupadd -f storm
+	id -u storm &>/dev/null || useradd -g storm storm
+	chown -R storm:storm .
+}
+ 
+
+ 
+
+configure_storm_base () {
+    juju-log "Configuring Storm general settings"
+    # Setup basic configuration
+
+    mkdir /mnt/storm
+    sudo chown storm:storm /mnt/storm
+    sed 's/storm.local.dir: \"storm-local\"/storm.local.dir: \"\/mnt\/storm\"/' < /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tpl > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    chown storm:storm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp $CHARM_DIR/storm.sh /etc/init.d/storm
+    chmod 755 /etc/init.d/storm
+    update-rc.d storm defaults 91 1
+
+}
+ 
+open_ports () {
+    juju-log "Configuring ports for service unit roles"
+    case $role in
+        master)
+            open-port `config-get nimbusport` # Nimbus Server
+            open-port `config-get uiport` # UI
+            ;;
+        worker)
+            open-port `config-get drpcport` # DRPC
+            ;;
+    esac
+}
+
+update_config () {
+    juju-log "Updating Storm Configuration"
+    nimbusmem=`config-get nimbusmemory`
+    juju-log "nimbus:$nimbusmem"
+    uimem=`config-get uimemory`
+    juju-log "ui:$uimem"
+    supervisormem=`config-get supervisormemory`
+    juju-log "supervisor:$supervisormem"
+    workermem=`config-get workermemory`
+    juju-log "worker:$workermem"
+    zkport=`config-get zookeeperport`
+    juju-log "zk port:$zkport"
+    nimbusport=`config-get nimbusport`
+    juju-log "nimbus port:$nimbusport"
+    uiport=`config-get uiport`
+    juju-log "ui port:$uiport"
+    drpcport=`config-get drpcport`
+    juju-log "drpc port:$drpcport"
+    nbrworkers=`config-get numberofworkers`
+    juju-log "Number of workers:$nbrworkers"
+    workerport=`config-get startingworkerport`
+    juju-log "worker port start:$workerport"
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/nimbus.childopts: .*/nimbus.childopts: \"-Xmx${nimbusmem}m\"/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/ui.childopts: .*/ui.childopts: \"-Xmx${uimem}m\"/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/supervisor.childopts: .*/supervisor.childopts: \"-Xmx${supervisormem}m\"/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/worker.childopts: .*/worker.childopts: \"-Xmx${workermem}m\"/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/storm.zookeeper.port: .*/storm.zookeeper.port: $zkport/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/nimbus.thrift.port: .*/nimbus.thrift.port: $nimbusport/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/ui.port: .*/ui.port: $uiport/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/drpc.port: .*/drpc.port: $drpcport/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    workerports="["
+    lastport=$(($workerport + $nbrworkers - 1))
+    for n in `eval echo {$workerport..$lastport}`; do
+        workerports="$workerports$n"
+	    if [ "$n" != "$lastport" ]; then
+           workerports="$workerports,"
+        fi
+    done 
+    workerports="$workerports]"
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/supervisor.slots.ports: .*/supervisor.slots.ports: $workerports/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+}
+ 
+configure_master () {
+    juju-log "Configuring nimbus for storm"
+    nimbus=`/sbin/ifconfig eth0 | grep "inet addr" | awk -F: '{print $2}' | awk '{print $1}'`
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/nimbus.host: .*/nimbus.host: \"$nimbus\"/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    relation-set master_node=$nimbus
+    touch /opt/storm/apache-storm-0.9.1-incubating/conf/master
+}
+
+validate_master () {
+    juju-log "Check if master configuration is still set-up"
+    if [ ! -f /opt/storm/apache-storm-0.9.1-incubating/conf/master ]; then
+           configure_master
+    fi
+}
+ 
+purge_master () {
+    juju-log "Purging nimbus from storm"
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/nimbus.host: .*/nimbus.host: /" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    rm -f /opt/storm/apache-storm-0.9.1-incubating/conf/master
+}
+ 
+configure_worker () {
+    juju-log "Configuring supervisor for storm"
+    MASTER=`relation-get master_node`
+    juju-log "master: $MASTER"	
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/nimbus.host: .*/nimbus.host: \"$MASTER\"/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    touch /opt/storm/apache-storm-0.9.1-incubating/conf/worker
+}
+
+validate_worker () {
+    juju-log "Check if worker configuration is still set-up"
+    if [ ! -f /opt/storm/apache-storm-0.9.1-incubating/conf/worker ]; then
+           configure_worker
+    fi
+}
+ 
+purge_worker () {
+    juju-log "Purging supervisor configuration from storm"
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/nimbus.host: .*/nimbus.host: /" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    rm -f /opt/storm/apache-storm-0.9.1-incubating/conf/worker
+}
+ 
+update_coworkers () {
+    juju-log "Reconfiguring Storm DRPC configuration"
+    for member in `relation-list`
+    do
+        address=`relation-get private-address $member`
+        [ -z "$drpcs" ] && drpcs=\"$address\" || drpcs="$drpcs,\"$address\""
+        port=`relation-get port $member`
+	juju-log "$member - $address - $drpcs"
+    done
+    drpcs="$drpcs,\"$private_address\""
+    # DRPC configuration reside in storm config
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp  
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/drpc.servers: .*/drpc.servers: [$drpcs]/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+}
+ 
+configure_zookeeper () {
+    juju-log "Reconfiguring Storm zookeeper configuration"
+    for member in `relation-list`
+    do
+        address=`relation-get private-address $member`
+        [ -z "$zks" ] && zks=\"$address\" || zks="$zks,\"$address\""
+        port=`relation-get port $member`
+	juju-log "$member - $address - $zks"
+    done
+    # Zookeeper configuration reside in storm config
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp  
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/storm.zookeeper.servers: .*/storm.zookeeper.servers: [$zks]/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+}
+ 
+purge_zookeeper () {
+    juju-log "Purging zookeeper configuration from Storm"
+    cp /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+    cat /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp | sed "s/storm.zookeeper.servers: .*/storm.zookeeper.servers: []/" > /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml
+    rm /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml.tmp
+}
+ 
+# This function validates that both zookeeper and
+# the dfs root have been configured which should
+# be enough to start hbase
+service_ready () {
+    zk_configured && master_configured && return 0 || return 1
+}
+ 
+zk_configured () {
+    # Validate that localhost has been substituted
+    pattern="storm.zookeeper.servers: [\"localhost\"]"
+    [ `grep -c "$pattern" /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml` -eq 0 ] && return 0 || return 1
+}
+ 
+master_configured () {
+    # Validate nimbus has been changed from localhost
+    pattern="nimbus.host: \"localhost\""
+    [ `grep -c "$pattern" /opt/storm/apache-storm-0.9.1-incubating/conf/storm.yaml` -eq 0 ] && return 0 || return 1
+}
+ 
+
+ 
+# Storm Service Control Commands
+restart_storm () { 
+    juju-log "Restarting storm"
+    stop_storm 
+	sleep 10
+    start_storm
+}
+ 
+# This function is intelligent as it will
+# only try to start start if its configured
+# with appropriate relations
+start_storm () { 
+    if service_ready
+    then
+        juju-log "Starting storm"
+        service storm start || :
+    fi
+
+}
+ 
+stop_storm () {
+        juju-log "Stopping storm"
+        service storm stop || :
+}
+  
+resolve_role () {
+    role="unconfigured"
+    [ -d /opt/storm/apache-storm-0.9.1-incubating/conf/worker ] && role="worker" || :
+    [ -d /opt/storm/apache-storm-0.9.1-incubating/conf/master ] && role="master" || :
+    echo $role
+}
+
+deploy_firesuit () {
+    juju-log "deploying topology to master"
+    mkdir /var/firesuit
+    touch /var/firesuit/config.yml
+    if [ ! -f /opt/storm/apache-storm-0.9.1-incubating/conf/master ]; then
+        wget http://repo.scala-sbt.org/scalasbt/sbt-native-packages/org/scala-sbt/sbt/0.13.1/sbt.deb
+        dpkg -i sbt.deb
+
+        wget https://github.com/peterklipfel/firesuit/archive/master.zip
+        unzip master.zip
+        cd firesuit-master/processing/storm
+        sbt compile assembly
+    fi
+}
+start_firesuit (){
+    juju-log "attempting to start firesuit topology"
+    cd /opt/storm/firesuit-master/processing/storm
+    java -client -Dstorm.options= -Dstorm.home=/opt/storm/apache-storm-0.9.1-incubating -Djava.library.path=/usr/local/lib:/opt/local/lib:/usr/lib -Dstorm.conf.file= -cp /opt/storm/apache-storm-0.9.1-incubating/lib/snakeyaml-1.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/carbonite-1.3.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-logging-1.1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/joda-time-2.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/httpcore-4.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/servlet-api-2.5-20081211.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/asm-4.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-servlet-0.3.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clj-time-0.4.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/logback-classic-1.0.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/meat-locker-0.3.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/kryo-2.17.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/json-simple-1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.cli-0.2.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/reflectasm-1.07-shaded.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jgrapht-core-0.9.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-core-1.1.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/storm-core-0.9.1-incubating.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/disruptor-2.10.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/guava-13.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-lang-2.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clout-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/objenesis-1.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-fileupload-1.2.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/zookeeper-3.3.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/core.incubator-0.1.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.logging-0.2.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/curator-framework-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/netty-3.6.3.Final.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clojure-1.4.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/junit-3.8.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jetty-util-6.1.26.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-io-1.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/servlet-api-2.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/curator-client-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/logback-core-1.0.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clj-stacktrace-0.2.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.macro-0.1.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-codec-1.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/slf4j-api-1.6.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/math.numeric-tower-0.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-devel-0.3.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jline-2.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/httpclient-4.1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jetty-6.1.26.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/compojure-1.1.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/minlog-1.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/hiccup-0.3.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-exec-1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-jetty-adapter-0.3.11.jar:`pwd`/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar:/opt/storm/apache-storm-0.9.1-incubating/conf:/opt/storm/apache-storm-0.9.1-incubating/bin -Dstorm.jar=`pwd`/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar storm.starter.topology.ExclamationTopology ExclamationTopology
+}
+
+ 
+COMMAND=`basename $0`
+role="`resolve_role`"
+ 
+case $COMMAND in
+    install)
+        configure_hosts
+        install_base_packages
+        configure_storm_base
+        deploy_firesuit
+        ;;
+    amqp-relation-joined)
+        $rabbitip=`relation-get hostname`
+        echo "rabbitip: $rabbitip" >> /var/firesuit/config.yml
+        ;;
+    database-relation-joined)
+        $cassandraip=`relation-get private-address`
+        echo "cassandraip: $cassandraip" >> /var/firesuit/config.yml
+        start_firesuit
+        ;;
+    worker-relation-joined)
+        # do nothing
+        ;;
+    master-relation-changed)
+        ready=`relation-get ready`
+        if [ -z "$ready" ]
+        then
+            juju-log "Master not ready - waiting"
+            exit 0
+        else
+            juju-log "Master ready - starting master"
+            start_storm
+        fi
+        ;;
+    master-relation-departed|master-relation-broken)
+        juju-log "No master relation - dropping config and terminating master"
+        purge_master
+        stop_storm
+        ;;
+    zookeeper-relation-changed|zookeeper-relation-departed)
+        configure_zookeeper
+        start_storm
+        ;;
+    zookeeper-relation-broken)
+        juju-log "No Zookeeper - dropping config and terminating storm"
+        purge_zookeeper
+        stop_storm
+        ;;
+    master-relation-joined)
+        case $role in
+            unconfigured)
+                juju-log "Configuring this unit as a master"
+                role="master"
+                configure_master
+                open_ports 
+                start_storm
+                sleep 30  # TODO this should probably live in packaging
+                sleep 30  # TODO this should probably live in packaging
+                relation-set ready="true"
+                ;;
+            master)
+                juju-log "Already configured as master"
+                # Unit should only ever assume this role once
+                # but it might be stopped due to a break between
+                # itself and zookeeper - so try to start
+                validate_master
+                start_storm
+                relation-set ready="true"
+                ;;
+            worker)      
+                juju-log "Already configured as another role: $role"
+                exit 1
+                ;;
+        esac
+        ;;
+    worker-relation-changed)
+        ready=`relation-get ready`
+        if [ -z "$ready" ]
+        then
+            juju-log "Master not ready - waiting"
+            exit 0
+        else
+            case $role in
+                unconfigured)
+                    juju-log "Configuring this unit as a worker"
+                    role="worker"
+                    configure_worker
+                    open_ports
+                    start_storm
+                    ;;
+                worker)
+                    juju-log "Already configured as worker"
+                    # Unit should only ever assume this role once
+                    # but it might be stopped due to a break between
+                    # itself and a master - so try to start
+                    validate_worker
+                    start_storm
+                    ;;
+                master)
+                    juju-log "Already configured as another role: $role"
+                    exit 1
+                    ;;
+            esac
+        fi
+        ;;
+    coworker-relation-joined|coworker-relation-broken|worker-relation-departed)
+        update_coworkers
+        restart_storm
+        ;;
+    coworker-relation-changed)
+	# Don't do anything
+        ;;
+    worker-relation-broken|worker-relation-departed)
+        # No master - always shutdown
+	    purge_worker
+        stop_storm
+        ;;
+    config-changed)
+        update_config
+	restart_storm
+        ;;
+    upgrade-charm)
+	    juju-log "not implemented"
+        ;;
+    *)
+        juju-log "Command not recognised: $COMMAND"
+        ;;
+esac
+
+

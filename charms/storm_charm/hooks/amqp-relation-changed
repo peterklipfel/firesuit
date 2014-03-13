@@ -303,6 +303,8 @@ resolve_role () {
 
 deploy_firesuit () {
     juju-log "deploying topology to master"
+    mkdir /var/firesuit
+    touch /var/firesuit/config.yml
     if [ ! -f /opt/storm/apache-storm-0.9.1-incubating/conf/master ]; then
         wget http://repo.scala-sbt.org/scalasbt/sbt-native-packages/org/scala-sbt/sbt/0.13.1/sbt.deb
         dpkg -i sbt.deb
