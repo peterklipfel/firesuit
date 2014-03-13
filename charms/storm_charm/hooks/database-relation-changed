@@ -1,0 +1,4 @@
+#!/bin/bash
+
+python firesuit-master/api/set_config.py cassandraip `relation-get private-address`
+touch `pwd`/firesuit-master/api/touch_to_reload

@@ -12,6 +12,8 @@ provides:
 requires:
   amqp:
     interface: rabbitmq
+  database:
+    interface: cassandra
 #peers:
 #  peer-relation:
 #    interface: rabbitmq

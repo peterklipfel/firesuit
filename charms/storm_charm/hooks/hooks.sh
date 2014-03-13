@@ -310,7 +310,7 @@ deploy_firesuit () {
         wget https://github.com/peterklipfel/firesuit/archive/master.zip
         unzip master.zip
         cd firesuit-master/processing/storm
-        sbt compile package assembly
+        sbt compile assembly
     fi
 }
 start_firesuit (){
