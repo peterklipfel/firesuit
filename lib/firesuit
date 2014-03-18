@@ -4,6 +4,11 @@ mkdir -p $HOME/.firesuit
 touch $HOME/.firesuit/previous_log_check
 
 copy_local_charms (){
+  mkdir -p $HOME/charm/precise/storm/
+  mkdir -p $HOME/charm/precise/cassandra/
+  mkdir -p $HOME/charm/precise/rabbitmq/
+  mkdir -p $HOME/charm/precise/flask/
+
   cp -r charms/storm_charm/* $HOME/charm/precise/storm/
   cp -r charms/cassandra_charm/* $HOME/charm/precise/cassandra/
   cp -r charms/rabbitmq-server/* $HOME/charm/precise/rabbitmq/
@@ -33,18 +38,41 @@ deploy_flask () {
   juju deploy -v --repository=/home/$USER/charm/ local:flask
 }
 
+show_commands() {
+  echo "
+  monitor              show a refreshing list of the current cluster
+  load                 loads deploy scripts into local directories (required for deployment)
+  predeploy            set up master node for system coordination
+  deploy               deploys entire infrastructure
+  deploy-storm         only deploy storm components (stormworker, stormmaster, zookeeper)
+  deploy-rabbitmq      only deploy rabbitmq node
+  deploy-flask         only deploy flask node
+  deploy-cassandra     deploy cassandra cluster (2 node on local, 3 node in cloud)
+  bind-storm-internal  ties storm nodes together (zookeeper, stormmaster, stormworker)
+  bind-storm-extermal  ties storm to rabbitmq and cassandra
+  bind-flask           binds flask to rabbitmq
+  show-logs            tail the debug logs from your machines (std out is piped to these logs)
+  destroy-all          tear down your infrastructure
+  help                 display this message
+  "
+}
+
 case $1 in
+  help)
+    show_commands
+    ;;
   monitor)
     watch juju status
     ;;
   load)
     copy_local_charms
     ;;
-  preload)
-    mkdir -p charms/storm_charm
-    mkdir charms/cassandra_charms
-    mkdir charms/rabbitmq-server
-    mkdir charms/flask_charm
+  expose-all)
+    juju expose stormworker
+    juju expose stormmaster
+    juju expose rabbitmq-server
+    juju expose cassandra
+    juju expose flask
     ;;
   predeploy)
     echo "setting up environment"
@@ -58,33 +86,38 @@ case $1 in
     deploy_flask
     ;;
   deploy-storm)
+    copy_local_charms
     deploy_storm
     ;;
   deploy-rabbitmq)
+    copy_local_charms
     deploy_rabbitmq
     ;;
   deploy-cassandra)
+    copy_local_charms
     deploy_cassandra
     ;;
   deploy-flask)
+    copy_local_charms
     deploy_flask
     ;;
   bind-storm-internal)
     juju add-relation stormmaster zookeeper
     juju add-relation stormworker zookeeper
+    sleep 30 # this is a hack to let things settle
     juju add-relation stormmaster:master stormworker:worker
     ;;
   bind-storm-external)
-    juju add-relation stormmaster rabbitmq
-    juju add-relation stormmaster cassandra
+    juju add-relation stormmaster rabbitmq-server
+    juju add-relation stormmaster:database cassandra:database
     ;;
   bind-flask)
-    juju add-relation rabbitmq flask
+    juju add-relation rabbitmq-server flask
     ;;
   show-logs)
     env=`juju status | grep environment | cut -d ' ' -f2`
     if [[ $env == local ]]; then
-      tail -f $HOME/.juju/local/log/*
+      tail -f $HOME/.juju/local/log/unit*
     else
       juju debug-log
     fi
@@ -97,4 +130,6 @@ case $1 in
       juju destroy-environment
     fi
     ;;
+  *)
+    echo "$1 not a valid firesuit command"
 esac

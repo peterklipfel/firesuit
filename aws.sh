@@ -25,14 +25,3 @@ rm tmp.yaml
 rm uniquified.yaml
 mkdir ~/.juju
 mv environments.yaml ~/.juju/environments.yaml
-
-echo "Setting up juju environment, this can take a number of minutes"
-sudo juju bootstrap
-juju deploy zookeeper
-juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
-juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
-juju deploy -v --repository=/home/ubuntu/charm/ local:flask
-juju deploy rabbitmq-server
-juju deploy cassandra
-juju add-unit cassandra
-juju add-unit cassandra

@@ -303,6 +303,8 @@ resolve_role () {
 
 deploy_firesuit () {
     juju-log "deploying topology to master"
+    mkdir /var/firesuit
+    touch /var/firesuit/config.yml
     if [ ! -f /opt/storm/apache-storm-0.9.1-incubating/conf/master ]; then
         wget http://repo.scala-sbt.org/scalasbt/sbt-native-packages/org/scala-sbt/sbt/0.13.1/sbt.deb
         dpkg -i sbt.deb
@@ -316,7 +318,13 @@ deploy_firesuit () {
 start_firesuit (){
     juju-log "attempting to start firesuit topology"
     cd /opt/storm/firesuit-master/processing/storm
-    java -client -Dstorm.options= -Dstorm.home=/opt/storm/apache-storm-0.9.1-incubating -Djava.library.path=/usr/local/lib:/opt/local/lib:/usr/lib -Dstorm.conf.file= -cp /opt/storm/apache-storm-0.9.1-incubating/lib/snakeyaml-1.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/carbonite-1.3.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-logging-1.1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/joda-time-2.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/httpcore-4.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/servlet-api-2.5-20081211.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/asm-4.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-servlet-0.3.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clj-time-0.4.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/logback-classic-1.0.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/meat-locker-0.3.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/kryo-2.17.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/json-simple-1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.cli-0.2.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/reflectasm-1.07-shaded.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jgrapht-core-0.9.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-core-1.1.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/storm-core-0.9.1-incubating.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/disruptor-2.10.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/guava-13.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-lang-2.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clout-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/objenesis-1.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-fileupload-1.2.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/zookeeper-3.3.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/core.incubator-0.1.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.logging-0.2.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/curator-framework-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/netty-3.6.3.Final.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clojure-1.4.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/junit-3.8.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jetty-util-6.1.26.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-io-1.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/servlet-api-2.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/curator-client-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/logback-core-1.0.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clj-stacktrace-0.2.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.macro-0.1.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-codec-1.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/slf4j-api-1.6.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/math.numeric-tower-0.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-devel-0.3.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jline-2.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/httpclient-4.1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jetty-6.1.26.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/compojure-1.1.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/minlog-1.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/hiccup-0.3.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-exec-1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-jetty-adapter-0.3.11.jar:`pwd`/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar:/opt/storm/apache-storm-0.9.1-incubating/conf:/opt/storm/apache-storm-0.9.1-incubating/bin -Dstorm.jar=`pwd`/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar storm.starter.topology.ExclamationTopology ExclamationTopology
+    currentStatus=`/opt/storm/apache-storm-0.9.1-incubating/bin/storm list | grep -i ExclamationTopology | cut -d ' ' -f3`
+    if [[ "$currentStatus" == "ACTIVE" ]]; then
+        #topology is deployed
+        echo "topology is running"
+    else
+        java -client -Dstorm.options= -Dstorm.home=/opt/storm/apache-storm-0.9.1-incubating -Djava.library.path=/usr/local/lib:/opt/local/lib:/usr/lib -Dstorm.conf.file= -cp /opt/storm/apache-storm-0.9.1-incubating/lib/snakeyaml-1.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/carbonite-1.3.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-logging-1.1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/joda-time-2.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/httpcore-4.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/servlet-api-2.5-20081211.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/asm-4.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-servlet-0.3.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clj-time-0.4.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/logback-classic-1.0.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/meat-locker-0.3.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/kryo-2.17.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/json-simple-1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.cli-0.2.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/reflectasm-1.07-shaded.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jgrapht-core-0.9.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-core-1.1.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/storm-core-0.9.1-incubating.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/disruptor-2.10.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/guava-13.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-lang-2.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clout-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/objenesis-1.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-fileupload-1.2.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/zookeeper-3.3.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/core.incubator-0.1.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.logging-0.2.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/curator-framework-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/netty-3.6.3.Final.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clojure-1.4.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/junit-3.8.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jetty-util-6.1.26.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-io-1.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/servlet-api-2.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/curator-client-1.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/logback-core-1.0.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/clj-stacktrace-0.2.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/tools.macro-0.1.0.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-codec-1.4.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/slf4j-api-1.6.5.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/math.numeric-tower-0.0.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-devel-0.3.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jline-2.11.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/httpclient-4.1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/jetty-6.1.26.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/compojure-1.1.3.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/minlog-1.2.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/hiccup-0.3.6.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/commons-exec-1.1.jar:/opt/storm/apache-storm-0.9.1-incubating/lib/ring-jetty-adapter-0.3.11.jar:`pwd`/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar:/opt/storm/apache-storm-0.9.1-incubating/conf:/opt/storm/apache-storm-0.9.1-incubating/bin -Dstorm.jar=`pwd`/target/scala-2.9.2/scala-storm-starter-assembly-0.0.2-SNAPSHOT.jar storm.starter.topology.ExclamationTopology ExclamationTopology
+    fi
 }
 
  
@@ -331,13 +339,17 @@ case $COMMAND in
         deploy_firesuit
         ;;
     amqp-relation-joined)
-        $rabbitip=`relation-get hostname`
+        rabbitip=`relation-get hostname`
         echo "rabbitip: $rabbitip" >> /var/firesuit/config.yml
         ;;
+    # amqp-relation-joined)
     database-relation-joined)
-        $cassandraip=`relation-get private-address`
+        cassandraip=`relation-get private-address`
         echo "cassandraip: $cassandraip" >> /var/firesuit/config.yml
         start_firesuit
+        ;;
+    database-relation-changed)
+        # do nothing
         ;;
     worker-relation-joined)
         # do nothing
@@ -375,8 +387,6 @@ case $COMMAND in
                 configure_master
                 open_ports 
                 start_storm
-                sleep 30  # TODO this should probably live in packaging
-                start_firesuit
                 sleep 30  # TODO this should probably live in packaging
                 relation-set ready="true"
                 ;;
