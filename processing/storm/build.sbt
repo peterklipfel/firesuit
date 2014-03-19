@@ -10,6 +10,8 @@ scalaVersion := "2.9.2"
 
 fork in run := true
 
+net.virtualvoid.sbt.graph.Plugin.graphSettings
+
 resolvers ++= Seq(
   "twitter4j" at "http://twitter4j.org/maven2",
   "clojars.org" at "http://clojars.org/repo"
@@ -25,6 +27,10 @@ libraryDependencies ++= Seq(
   "com.datastax.cassandra" % "cassandra-driver-core" % "1.0.3",
   "com.yammer.metrics" % "metrics-core" % "2.2.0",
   "org.yaml" % "snakeyaml" % "1.8"
+  // "com.fasterxml.jackson.core" % "jackson-core" % "2.1.1",
+  // "com.fasterxml.jackson.core" % "jackson-annotations" % "2.1.1",
+  // "com.fasterxml.jackson.core" % "jackson-databind" % "2.1.1",
+  // "com.fasterxml.jackson.dataformat" % "jackson-dataformat-yaml" % "2.1.1"
   // "javax.servlet" % "servlet-api" % "2.5-20081211" intransitive
 )
 

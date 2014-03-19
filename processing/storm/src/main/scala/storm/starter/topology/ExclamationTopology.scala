@@ -15,15 +15,16 @@ object ExclamationTopology {
 
     val builder: TopologyBuilder = new TopologyBuilder()
 
-    val reader = new FiresuitConfigReader()
+    val reader = new FiresuitConfig()
     val firesuitConf = reader.getConfig()
 
-    println(firesuitConf.rabbitip)
-    println(firesuitConf.cassandraip)
+    println(firesuitConf("rabbitip"))
+    println(firesuitConf("cassandraip"))
 
     // builder.setSpout("word", new TestWordSpout(), 10)
-    builder.setSpout("rabbitmq", new AMQPSpout(firesuitConf.rabbitip, 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
-    builder.setBolt("rawJSONtoCassandra", new CassandraRawStorer(firesuitConf.cassandraip), 2).shuffleGrouping("rabbitmq")
+
+    builder.setSpout("rabbitmq", new AMQPSpout("localhost", 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
+    builder.setBolt("rawJSONtoCassandra", new CassandraRawStorer(firesuitConf("cassandraip")), 2).shuffleGrouping("rabbitmq")
     builder.setBolt("exclaim", new ExclamationBolt(), 3).shuffleGrouping("rawJSONtoCassandra")
 
     val config = new Config()
@@ -33,6 +34,8 @@ object ExclamationTopology {
       config.setNumWorkers(3)
       StormSubmitter.submitTopology(args(0), config, builder.createTopology())
     } else {
+      // config.setNumWorkers(3)
+      // StormSubmitter.submitTopology("ExclamationTopology", config, builder.createTopology())
       val cluster: LocalCluster = new LocalCluster()
       cluster.submitTopology("ExclamationTopology", config, builder.createTopology())
       // Utils.sleep(5000)
