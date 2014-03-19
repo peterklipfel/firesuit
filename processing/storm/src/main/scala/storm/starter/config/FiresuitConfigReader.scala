@@ -6,10 +6,11 @@ import java.io.{FileReader, FileNotFoundException, IOException}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
-class FiresuitConfig(
-  @JsonProperty("cassandraip") _cassandraip: String,
-             @JsonProperty("rabbitip") _rabbitip: String) {
-  val cassandraip = _cassandraip
-  val rabbitip: String = _rabbitip
+class FiresuitConfigReader {
+  def getConfig(): FiresuitConfig = {
+    val reader = new FileReader("/var/firesuit/config.yml")
+    val mapper = new ObjectMapper(new YAMLFactory())
+    val config: FiresuitConfig = mapper.readValue(reader, classOf[FiresuitConfig])
+    return config
+  }
 }
-

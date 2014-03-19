@@ -15,12 +15,15 @@ object ExclamationTopology {
 
     val builder: TopologyBuilder = new TopologyBuilder()
 
-    val reader = new FiresuitConfig()
+    val reader = new FiresuitConfigReader()
     val firesuitConf = reader.getConfig()
 
+    println(firesuitConf.rabbitip)
+    println(firesuitConf.cassandraip)
+
     // builder.setSpout("word", new TestWordSpout(), 10)
-    builder.setSpout("rabbitmq", new AMQPSpout(firesuitConf("rabbitip"), 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
-    builder.setBolt("rawJSONtoCassandra", new CassandraRawStorer(firesuitConf("cassandraip")), 2).shuffleGrouping("rabbitmq")
+    builder.setSpout("rabbitmq", new AMQPSpout(firesuitConf.rabbitip, 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
+    builder.setBolt("rawJSONtoCassandra", new CassandraRawStorer(firesuitConf.cassandraip), 2).shuffleGrouping("rabbitmq")
     builder.setBolt("exclaim", new ExclamationBolt(), 3).shuffleGrouping("rawJSONtoCassandra")
 
     val config = new Config()
