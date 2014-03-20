@@ -346,7 +346,7 @@ case $COMMAND in
     database-relation-joined)
         cassandraip=`relation-get private-address`
         echo "cassandraip: $cassandraip" >> /var/firesuit/config.yml
-        start_firesuit
+        # start_firesuit
         ;;
     database-relation-changed)
         # do nothing
