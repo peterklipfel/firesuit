@@ -46,7 +46,7 @@ def install():
     os.system("wget localhost:15672/cli/rabbitmqadmin")
     os.system("chmod +x ./rabbitmqadmin")
     os.system("mv rabbitmqadmin /usr/bin/")
-    os.system("rabbitmqadmin declare exchange name=stormExchange type=fanout")
+    os.system("rabbitmqadmin declare exchange name=stormExchange type=topic")
     # ensure user + permissions for peer relations that
     # may be syncing data there via SSH_USER.
     unison.ensure_user(user=rabbit.SSH_USER, group=rabbit.RABBIT_USER)
