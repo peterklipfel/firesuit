@@ -20,9 +20,9 @@ resolvers ++= Seq(
 libraryDependencies ++= Seq(
   "com.rabbitmq" % "amqp-client" % "3.1.1"
     exclude ("log4j", "log4j"),
-  "storm" % "storm" % "0.9.0" % "provided" 
-    exclude ("org.slf4j", "slf4j-parent")
-    exclude ("org.slf4j", "log4j-over-slf4j"),
+  "storm" % "storm" % "0.9.0" % "provided",
+    // exclude ("org.slf4j", "slf4j-parent"),
+    // exclude ("org.slf4j", "log4j-over-slf4j"),
   "org.clojure" % "clojure" % "1.4.0" % "provided"
     exclude ("log4j", "log4j"),
   "org.twitter4j" % "twitter4j-core" % "2.2.6-SNAPSHOT"
@@ -32,6 +32,8 @@ libraryDependencies ++= Seq(
   "org.specs2" %% "specs2" % "1.11" % "test"
     exclude ("log4j", "log4j"),
   "com.datastax.cassandra" % "cassandra-driver-core" % "1.0.3"
+    exclude ("org.slf4j", "slf4j-api")
+    exclude ("org.slf4j", "slf4j-log4j12")
     exclude ("log4j", "log4j"),
   "com.yammer.metrics" % "metrics-core" % "2.2.0"
     exclude ("log4j", "log4j"),
