@@ -23,7 +23,7 @@ object ExclamationTopology {
 
     // builder.setSpout("word", new TestWordSpout(), 10)
 
-    builder.setSpout("rabbitmq", new AMQPSpout("localhost", 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
+    builder.setSpout("rabbitmq", new AMQPSpout(firesuitConf("rabbitip"), 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
     builder.setBolt("rawJSONtoCassandra", new CassandraRawStorer(firesuitConf("cassandraip")), 2).shuffleGrouping("rabbitmq")
     builder.setBolt("exclaim", new ExclamationBolt(), 3).shuffleGrouping("rawJSONtoCassandra")
 
