@@ -3,7 +3,7 @@ package storm.starter.spout;
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.log4j.Logger;
+// import org.apache.log4j.Logger;
 
 import com.rabbitmq.client.AMQP.Queue;
 
@@ -61,7 +61,7 @@ import java.util.HashMap;
 public class AMQPSpout implements IRichSpout {
     private static final long serialVersionUID = 11258942292629263L;
 
-    private static final Logger log = Logger.getLogger(AMQPSpout.class);
+    // private static final Logger log = Logger.getLogger(AMQPSpout.class);
 
     /**
      * Storm config key to set the AMQP basic.qos prefetch-count parameter.
@@ -153,11 +153,11 @@ public class AMQPSpout implements IRichSpout {
                 try {
                     amqpChannel.basicAck(deliveryTag, false /* not multiple */);
                 } catch (IOException e) {
-                    log.warn("Failed to ack delivery-tag " + deliveryTag, e);
+                    // log.warn("Failed to ack delivery-tag " + deliveryTag, e);
                 }
             }
         } else {
-            log.warn(String.format("don't know how to ack(%s: %s)", msgId.getClass().getName(), msgId));
+            // log.warn(String.format("don't know how to ack(%s: %s)", msgId.getClass().getName(), msgId));
         }
     }
 
@@ -176,7 +176,7 @@ public class AMQPSpout implements IRichSpout {
               amqpChannel.close();
             }
         } catch (IOException e) {
-            log.warn("Error closing AMQP channel", e);
+            // log.warn("Error closing AMQP channel", e);
         }
 
         try {
@@ -184,7 +184,7 @@ public class AMQPSpout implements IRichSpout {
               amqpConnection.close();
             }
         } catch (IOException e) {
-            log.warn("Error closing AMQP connection", e);
+            // log.warn("Error closing AMQP connection", e);
         }
     }
 
@@ -208,11 +208,11 @@ public class AMQPSpout implements IRichSpout {
                 try {
                     amqpChannel.basicReject(deliveryTag, false /* don't requeue */);
                 } catch (IOException e) {
-                    log.warn("Failed to reject delivery-tag " + deliveryTag, e);
+                    // log.warn("Failed to reject delivery-tag " + deliveryTag, e);
                 }
             }
         } else {
-            log.warn(String.format("don't know how to reject(%s: %s)", msgId.getClass().getName(), msgId));
+            // log.warn(String.format("don't know how to reject(%s: %s)", msgId.getClass().getName(), msgId));
         }
     }
 
@@ -239,7 +239,7 @@ public class AMQPSpout implements IRichSpout {
                  * Maybe we should output them on a separate stream.
                  */
             } catch (ShutdownSignalException e) {
-                log.warn("AMQP connection dropped, will attempt to reconnect...");
+                // log.warn("AMQP connection dropped, will attempt to reconnect...");
                 Utils.sleep(WAIT_AFTER_SHUTDOWN_SIGNAL);
                 reconnect();
             } catch (InterruptedException e) {
@@ -257,7 +257,7 @@ public class AMQPSpout implements IRichSpout {
     public void open(@SuppressWarnings("rawtypes") Map config, TopologyContext context, SpoutOutputCollector collector) {
         Long prefetchCount = (Long) config.get(CONFIG_PREFETCH_COUNT);
         if (prefetchCount == null) {
-            log.info("Using default prefetch-count");
+            // log.info("Using default prefetch-count");
             prefetchCount = DEFAULT_PREFETCH_COUNT;
         } else if (prefetchCount < 1) {
             throw new IllegalArgumentException(CONFIG_PREFETCH_COUNT + " must be at least 1");
@@ -269,7 +269,7 @@ public class AMQPSpout implements IRichSpout {
 
             setupAMQP();
         } catch (IOException e) {
-            log.error("AMQP setup failed", e);
+            // log.error("AMQP setup failed", e);
         }
     }
 
@@ -288,12 +288,12 @@ public class AMQPSpout implements IRichSpout {
         this.amqpConnection = connectionFactory.newConnection();
         this.amqpChannel = amqpConnection.createChannel();
 
-        log.info("Setting basic.qos prefetch-count to " + prefetchCount);
+        // log.info("Setting basic.qos prefetch-count to " + prefetchCount);
         amqpChannel.basicQos(prefetchCount);
 
         final Queue.DeclareOk queue = queueDeclaration.declare(amqpChannel);
         final String queueName = queue.getQueue();
-        log.info("Consuming queue " + queueName);
+        // log.info("Consuming queue " + queueName);
 
         this.amqpConsumer = new QueueingConsumer(amqpChannel);
         this.amqpConsumerTag = amqpChannel.basicConsume(queueName, false /* no auto-ack */, amqpConsumer);
@@ -301,11 +301,11 @@ public class AMQPSpout implements IRichSpout {
 
 
     private void reconnect() {
-        log.info("Reconnecting to AMQP broker...");
+        // log.info("Reconnecting to AMQP broker...");
         try {
             setupAMQP();
         } catch (IOException e) {
-            log.warn("Failed to reconnect to AMQP broker", e);
+            // log.warn("Failed to reconnect to AMQP broker", e);
         }
     }
 
