@@ -109,6 +109,7 @@ case $1 in
     ;;
   bind-storm-external)
     juju add-relation stormmaster rabbitmq-server
+    juju add-relation stormworker rabbitmq-server
     juju add-relation stormmaster:database cassandra:database
     ;;
   bind-flask)
