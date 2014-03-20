@@ -1,0 +1,26 @@
+See README.storage for the persistent storage approach taken.
+
+TODO(jjo):  [2012/Sep/27]
+* [P0]  Support setting an invalid volume-map  - ie don't
+        assume we've 'lost' our volume assignment -> raise error,
+        to require human intervention (play safe & conservative)
+
+* [P0]  Review state/needed configs/etc in case of "re-attaching" set
+        of volumes into a fresh new deployment (should serve data
+        present in volume-s) - this really requires a well thought
+        statemachine transition diagram, to assure we'll never e.g.:
+        - override already populated volumes, and/or "partially"
+          serve a cluster (units should behave consistently).
+     
+* [P0]  Fix/implement DELAY_START_UNTIL_VOLUME logic (config set
+        to indeed make the instance to void serving, until volume-map
+        "assigns" a volume to it)
+
+* [P0]  Do "full-cycle" testing, specially assess that volumes
+        survive destroy-service, and can 'resume' serving if
+        re-attached and setup with proper 'volume-map'.
+
+* [P1]  Create helper scripts to scrape euca-describe-volumes, and 'merge'
+        with juju status output, to:
+        - fire attachments, then:
+        - set a proper volume-map (instance->volume)

@@ -1,0 +1,10 @@
+#---------------------------------------------------
+# This file is Juju managed
+#---------------------------------------------------
+define service {
+    use                             active-service
+    host_name                       ${NAGIOS_HOSTNAME}
+    service_description             ${NAGIOS_HOSTNAME} ${SERVICE_DESCRIPTION}
+    check_command                   check_nrpe!${NRPE_CMD_NAME}
+    servicegroups                   ${NAGIOS_SERVICEGROUP},
+}

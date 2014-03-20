@@ -1,0 +1,17 @@
+name: cassandra
+maintainer: JuanJo Ciarlante <jjo@canonical.com>
+summary: distributed storage system for structured data
+description: |
+  Cassandra is a distributed (peer-to-peer) system for the management and
+  storage of structured data.
+provides:
+  database:
+    interface: cassandra
+  jmx:
+    interface: cassandra
+  nrpe-external-master:
+    interface: nrpe-external-master
+    scope: container
+peers:
+  cluster:
+    interface: cassandra-cluster

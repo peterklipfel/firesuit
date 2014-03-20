@@ -1,0 +1,44 @@
+= Permanent storage =
+As juju/ZK doesn’t currently handle permanent storage lifetime (ie.
+create-volume (“storage pool”), attach-volume (“attach one volume from
+storage pool to a single instance), AFAICS until this is supported it
+must be worked-around.
+
+AFAIU not even creating an EBS charm would necessary help (does not
+provide #1, may not #4)
+
+* Requirements for this work-around:
+  -#0 perm-storage is (obviously) provided by EBS interface
+  -#1 permanent storage MUST “survive” service lifetime
+      doing a ‘destroy-service’ should not end destroying volumes
+      ^^^ means that create-volume is done “outside” juju itself
+  -#2 some kind of  volume->instance attach maps should be stored as a
+      service’s config volume-map:  {"cassandra/0": "vol-00000081",
+      "cassandra/5": "vol-00000082"}
+  -#3 cassandra charm support: react on volume-map change
+      - IF volume is empty: use cassandra-initvolume-and-migrate.sh (pasted
+        in this doc), with which I succeeded initializing (sfdisk, mkfs,
+        mount), and moving existing cassandra data to it (stop && copy
+        data && start )
+      - IF volume already has cassandra data: stop cassandra and start
+        serving from it
+  -#4 instances should not carry EC2 credentials
+      for obvious security reasons (note that ZK node indeed needs them)
+      if keystone supported some kind of ephemeral/credential delegation
+      (ala “AWS IAM”)
+* Proposal
+This is a realistic workflow as I can see it (Sept/2012):
+OPS admin does:
+  * create needed volumes (euca-create-volume)
+  * spawn as many cassandra units as volumes, builds a volume-map
+    (instance->volume_id), then:
+    for each instance,volume_id:
+      euca-attach-volume get_id(instance) volume_id
+  * ‘config-set volume-map YAML_map’ (each juju unit will have
+    pre-stored “its” volume, and react if it have been changed:
+    - stop cassandra
+    - IFF new volume is empty, copy existing data to new volume
+    - reconfigure cassandra if needed (e.g. data-dir)
+    - start cassandra
+
+--jjo, 2012/Sep/21.

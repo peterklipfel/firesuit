@@ -1,0 +1,593 @@
+#!/bin/bash
+# vim: set tabstop=2 expandtab:
+
+. ./scripts/volume-common.sh
+ETC_CASSANDRA="${ETC_CASSANDRA:-/etc/cassandra}"
+CASSANDRA_ENV="${ETC_CASSANDRA}/cassandra-env.sh"
+CASSANDRA_YML="${ETC_CASSANDRA}/cassandra.yaml"
+CASSANDRA_ACCESS="${ETC_CASSANDRA}/access.properties"
+CASSANDRA_PASSWD="${ETC_CASSANDRA}/passwd.properties"
+CASSANDRA_RACKDC="${ETC_CASSANDRA}/cassandra-rackdc.properties"
+CASSANDRA_TOPOLOGY="${ETC_CASSANDRA}/cassandra-topology.properties"
+CASSANDRA_USER="cassandra"
+CASSANDRA_GROUP="cassandra"
+
+set -e
+
+export LANG=en_US.UTF-8
+
+# Comms-less leader determination
+# Picks the unit with the lowest id.
+am_i_the_leader () {
+  # Leader is the lowest unit number and won't be in the
+  # list of relation peers
+  local units=$(relation-list)
+  local unit_no=${JUJU_UNIT_NAME##*/}
+  local unit
+  for unit in ${units}; do
+    peer_unit_no=${unit##*/}
+    if [ "${peer_unit_no}" -lt "${unit_no}" ]; then
+        juju-log "I am not the leader"
+        return 1
+    fi
+  done
+  juju-log "I am the leader"
+  return 0
+}
+
+bzr_ci () {
+  local msg=${FUNCNAME[1]}
+  test -n "$1" && msg="$1"
+  bzr st ${ETC_CASSANDRA}|egrep -q '^modified|added' || return 1
+  bzr ci -m "[$(date "+%Y-%m-%d %H:%M:%S")] ${JUJU_UNIT_NAME}: ${msg} auto-commit" ${ETC_CASSANDRA} || return 1
+  return 0
+}
+
+
+migrate_cassandra_data() {
+  local from=${1?} to=${2?}
+  [[ $from = $to ]] && return 0
+  /etc/init.d/cassandra stop
+  rsync -vaP "$from/" "$to/"
+  mv "$from" "$from.migrated_${JUJU_UNIT_NAME//\//-}@$(date +%s)"
+}
+
+# Install cassandra source and install packages
+install_cassandra () {
+  juju-log "Installing Cassandra"
+  # Install the repository
+  APT_REPO_SPEC="$(config-get apt-repo-spec)"
+  APT_REPO_KEY=$(config-get apt-repo-key)
+  # Check for configured extra packages to install from config
+  EXTRA_PACKAGES="$(config-get extra_packages)"
+  # Add the key
+  if [[ -n "${APT_REPO_KEY}" ]]; then
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${APT_REPO_KEY}
+  fi
+  if [[ -n "${APT_REPO_SPEC}" ]]; then 
+    echo "${APT_REPO_SPEC}" > /etc/apt/sources.list.d/cassandra.list
+  fi
+  # Update the repositories
+
+  echo "deb http://debian.datastax.com/community stable main" >> /etc/apt/sources.list
+  curl -L http://debian.datastax.com/debian/repo_key | apt-key add -
+
+  sudo apt-get update
+
+  if [ `uname -m` == 'x86_64' ]; then
+    wget --no-check-certificate --no-cookies -c --header "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/7u51-b13/jdk-7u51-linux-x64.tar.gz
+  else
+    wget --no-check-certificate --no-cookies -c --header "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/7u51-b13/jdk-7u51-linux-i586.tar.gz
+  fi
+  tar -xvf jdk*
+  mkdir -p /usr/lib/jvm
+  mv ./jdk1.7.0_51 /usr/lib/jvm/jdk1.7.0_51
+  update-alternatives --install "/usr/bin/java" "java" "/usr/lib/jvm/jdk1.7.0_51/bin/java" 1
+  update-alternatives --install "/usr/bin/javac" "javac" "/usr/lib/jvm/jdk1.7.0_51/bin/javac" 1
+  update-alternatives --install "/usr/bin/javaws" "javaws" "/usr/lib/jvm/jdk1.7.0_51/bin/javaws" 1
+  chmod a+x /usr/bin/java 
+  chmod a+x /usr/bin/javac 
+  chmod a+x /usr/bin/javaws
+  chown -R root:root /usr/lib/jvm/jdk1.7.0_51
+  update-alternatives --config java
+
+  # Ensure that cassandra does not startup before we have configured it
+  disable_cassandra_start
+  # Install the package
+  DEBIAN_FRONTEND=noninteractive apt-get -qq install -y dsc20 python-cheetah dnsutils bzr ${EXTRA_PACKAGES}
+  bzr_ci || :
+}
+
+# Update the cassandra environment with the appropriate JMX port
+configure_jmx_port () {
+  check_units_to_update || return 0
+  juju-log "Configuring JMX port"
+  JMX_PORT=$(config-get jmx-port)
+  test -n "${JMX_PORT}" || return 1
+  test ${JMX_PORT} -gt 0 -a ${JMX_PORT} -lt 65535 || return 1
+  sed -i -e "s/^JMX_PORT=.*/JMX_PORT=\"${JMX_PORT}\"/" ${CASSANDRA_ENV}
+  # Open port ready for expose
+  open-port ${JMX_PORT}/TCP
+}
+
+get_private_ip () {
+  # Make sure that we use the resolvable private address
+  # dig deals with both hostnames and ip addresses in a nice
+  # way - this has been tested in local and ec2 providers
+  # with ec2 and openstack
+  dig +short `unit-get private-address`
+}
+
+get_seed_nodes () {
+  FORCE_SEED_NODES=$(config-get force-seed-nodes)
+  if [[ -n $FORCE_SEED_NODES ]]; then
+    echo $FORCE_SEED_NODES
+  else
+    relation-get seed-nodes | sed -e 's!\s\+!,!g'
+  fi 
+}
+
+set_seed_nodes () {
+  FORCE_SEED_NODES=$(config-get force-seed-nodes)
+  if [[ -n $FORCE_SEED_NODES ]]; then
+    juju-log "Setting seed_node to $FORCE_SEED_NODES"
+    relation-set seed-nodes="$FORCE_SEED_NODES"
+  else
+    juju-log "Setting seed_node to $(running_nodes)"
+    relation-set seed-nodes="$(running_nodes)"
+  fi 
+}
+
+srv_root_get() {
+  sed -r -n 's,commitlog_directory: *([^ ]+)/commitlog.*,\1,p' ${CASSANDRA_YML}
+}
+srv_root_from_volid() {
+  local volid=${1?missing volid}
+  local mntpoint
+  if mntpoint=$(volume_mount_point_from_volid "${volid}"); then
+    echo "${mntpoint}/cassandra"
+  else
+    echo "/var/lib/cassandra"
+  fi
+}
+srv_root_save() {
+  local srv_root=${1:?missing srv_root}
+  sed -i -r -e $'/data_file_directories:/{\nN;s|- /.*|- '"${srv_root}/data"'|}' \
+         -e "s|^(commitlog_directory):.*|\1: ${srv_root}/commitlog|" \
+         -e "s|^(saved_caches_directory):.*|\1: ${srv_root}/savedcache_dir|" \
+         ${CASSANDRA_YML}
+  test -d "${srv_root}" || {
+    mkdir -p "${srv_root}"
+    chown -R ${CASSANDRA_USER}:${CASSANDRA_GROUP} "${srv_root}"
+  }
+}
+disable_cassandra_start() {
+  # Ensure that cassandra does not startup before we have configured it
+  if [ -e /usr/sbin/policy-rc.d ]; then
+      mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.orig
+  fi
+  install -m 755 files/policy-rc.d /usr/sbin/policy-rc.d
+}
+
+enable_cassandra_start() {
+  if [ -e /usr/sbin/policy-rc.d.orig ]; then
+      mv /usr/sbin/policy-rc.d.orig /usr/sbin/policy-rc.d
+  else
+      rm -rf /usr/sbin/policy-rc.d.orig
+  fi
+}
+
+get_initial_token() {
+    token_map_unitname=$(config-get token-map-by-unitname)
+    token_map_volid=$(config-get token-map-by-volid)
+    initial_token=""
+    if [[ -z ${token_map_unitname} ]] && [[ -z ${token_map_volid} ]]; then
+        echo $initial_token
+        return
+    elif [[ -n ${token_map_unitname} ]] && [[ -n ${token_map_volid} ]]; then
+        juju-log "ERROR: cannot specify token-map-by-unitname and token-map-by-volid"
+        exit 1
+    elif [[ -n ${token_map_unitname} ]]; then
+        token_map=$token_map_unitname
+        token_key=${JUJU_UNIT_NAME}
+    elif [[ -n ${token_map_volid} ]]; then
+        token_map=$token_map_volid
+        token_key=$(volume_get_volume_id)
+    fi
+    python="import sys;from yaml import load;token_map = load(sys.stdin);print token_map.get(\"${token_key}\")"
+    initial_token=$(echo $token_map | python -c "${python}")
+    echo ${initial_token/None/}
+}
+
+# Construct the cassandra.yaml file from the appropriate information above
+configure_cassandra () {
+  check_units_to_update || return 0
+  juju-log "Configuring Cassandra"
+  local LISTEN_ADDRESS=$(get_private_ip)
+  local CLUSTER_PORT=$(config-get cluster-port)
+  local CLIENT_PORT=$(config-get client-port)
+  local CLUSTER_NAME=$(config-get cluster-name)
+  local AUTO_MEMORY=$(config-get auto-memory)
+  local HEAP_SIZE=$(config-get heap-size)
+  local NEW_GEN_SIZE=$(config-get new-gen-size)
+  local SRV_ROOT=$(config-get srv-root)
+  local COMPACTION_THROUGHPUT=$(config-get compaction-throughput)
+  local STREAM_THROUGHPUT=$(config-get stream-throughput)
+  local NUM_TOKENS=$(config-get num-tokens)
+  local SEED_ADDRESSES=$(get_seed_nodes)
+  local INITIAL_TOKEN=$(get_initial_token)
+  local PARTITIONER=$(config-get partitioner)
+  local ENDPOINT_SNITCH=$(config-get endpoint_snitch)
+  local DATACENTER=$(config-get datacenter)
+  local RACK=$(config-get rack)
+  local DC_SUFFIX=$(config-get dc_suffix)
+  local PREFER_LOCAL=$(config-get prefer_local | tr '[:upper:]' '[:lower:]')
+  # This needs to 'detect' whether its running in ec2
+  # and use the ec2Snitch instead if it is - or we could
+  # specify this as a configuration parameter
+  # non-trivial sed to edit data_file_directories (has its value in the line following it)
+  sed -i -r -e "s/^cluster_name:.*/cluster_name: \'${CLUSTER_NAME}\'/" \
+         -e "s/(- seeds):.*/\1: \"${SEED_ADDRESSES}\"/" \
+         -e "s/^(storage_port):.*/\1: ${CLUSTER_PORT}/" \
+         -e "s/^(listen_address):.*/\1: ${LISTEN_ADDRESS}/" \
+         -e "s/^(rpc_address):.*/\1: ${LISTEN_ADDRESS}/" \
+         -e "s/^(rpc_port):.*/\1: ${CLIENT_PORT}/" \
+         -e "s/^(compaction_throughput_mb_per_sec):.*/\1: ${COMPACTION_THROUGHPUT}/" \
+         -e "s/^(# )?(stream_throughput_outbound_megabits_per_sec):.*/\2: ${STREAM_THROUGHPUT}/" \
+         -e "s/^(partitioner):.*/\1: ${PARTITIONER}/" \
+         -e "s/^(endpoint_snitch):.*/\1: ${ENDPOINT_SNITCH}/" \
+         ${CASSANDRA_YML}
+
+  ## Number of tokens or initial token
+  if [ $NUM_TOKENS -eq 0 ] && [ -n "$INITIAL_TOKEN" ]; then
+      sed -i -r -e "s/^(# )?(num_tokens):.*/#\2: ${NUM_TOKENS}/" \
+         -e "s/^(# )?(initial_token):.*/\2: ${INITIAL_TOKEN}/" \
+         ${CASSANDRA_YML}
+  elif [ $NUM_TOKENS -gt 0 ] && [ -z "$INITIAL_TOKEN" ]; then 
+      sed -i -r -e "s/^(# )?(num_tokens):.*/\2: ${NUM_TOKENS}/" \
+         -e "s/^(# )?(initial_token):.*/# \2: ${INITIAL_TOKEN}/" \
+         ${CASSANDRA_YML}
+  else
+        juju-log "ERROR: cannot specify num_tokens and initial_token"
+        exit 1
+  fi
+
+  ## Enpoint Snitch configuration
+  # XXX Handle more endpoint snitch options
+  if [[ "$ENDPOINT_SNITCH" =~ .*SimpleSnitch ]]; then
+    rm -f ${CASSANDRA_RACKDC} ${CASSANDRA_TOPOLOGY}
+  elif [[ "$ENDPOINT_SNITCH" =~ .*GossipingPropertyFileSnitch ]]; then
+    rm -f ${CASSANDRA_TOPOLOGY}
+    (
+        echo "dc=${DATACENTER}"
+        echo "rack=${RACK}"
+        if [ -n "$DC_SUFFIX" ]; then
+          echo "dc_suffix=${DC_SUFFIX}"
+        fi
+        if [ "$PREFER_LOCAL" = "true" ]; then
+          echo "prefer_local=true"
+        fi
+    ) > ${CASSANDRA_RACKDC}
+  else
+    rm -f ${CASSANDRA_RACKDC}
+  fi
+
+  ## Storage configuration
+  local volid
+  local IO_SCHEDULER=$(config-get io-scheduler)
+  if volid=$(volume_get_volume_id);then
+    juju-log "INFO: volid=${volid}"
+  else
+    disable_cassandra_start
+    juju-log "ERROR: invalid storage_config at ${FUNCNAME[0]}"
+    return 1
+  fi
+  local srv_root_curr=$(srv_root_get)
+  (
+  set -e
+  [[ -z "${volid}" ]] && exit 0
+  if volume_is_permanent "${volid}";then
+    local srv_root_new=$(srv_root_from_volid ${volid})
+    if [[ ${srv_root_new} != ${srv_root_curr} ]];then
+      volume_init_and_mount ${volid}
+      if [[ -d ${srv_root_curr}/data ]];then
+        juju-log "WARNING: found already existing cassandra data, migrating ${srv_root_curr} -> ${srv_root_new}"
+        migrate_cassandra_data ${srv_root_curr} ${srv_root_new}
+      fi
+      srv_root_save ${srv_root_new}
+    fi
+    # Set the kernel block scheduler
+    if [[ -n "$IO_SCHEDULER" ]]; then
+        DEV=$(df $srv_root_new | awk '{print $1}' |tail -n 1)
+        DEV=${DEV#\/dev\/}
+        DEV=${DEV%[0-9]}
+        echo "$IO_SCHEDULER" > /sys/block/${DEV}/queue/scheduler
+    fi
+  fi
+  ) && enable_cassandra_start || disable_cassandra_start
+
+  # Open port ready for expose
+  open-port ${CLIENT_PORT}/TCP
+
+  # Default cassandra-env.sh for some cassandra 1.0.x specifies -Xss128k
+  # while 160k min is required
+  sed -i -e "s/-Xss128k/-Xss256k/" ${CASSANDRA_ENV}
+  # Configure memory settings as specified in configuration
+  if [ "$AUTO_MEMORY" = "False" ]; then
+    juju-log "Configuring Manual Memory Setttings"
+    sed -i -e "s/^[#]MAX_HEAP_SIZE=.*/MAX_HEAP_SIZE=\"${HEAP_SIZE}\"/" \
+           -e "s/^[#]HEAP_NEWSIZE=.*/HEAP_NEWSIZE=\"${NEW_GEN_SIZE}\"/" ${CASSANDRA_ENV}
+  else
+    sed -i -e "s/^[#]MAX_HEAP_SIZE=.*/#MAX_HEAP_SIZE=\"${HEAP_SIZE}\"/" \
+           -e "s/^[#]HEAP_NEWSIZE=.*/#HEAP_NEWSIZE=\"${NEW_GEN_SIZE}\"/" ${CASSANDRA_ENV}
+  fi 
+  local use_simpleauth=$(config-get use-simpleauth)
+  if [[ ${use_simpleauth} == True ]];then
+      local auth_opts
+      install -o ${CASSANDRA_USER} -m 600 /dev/null ${CASSANDRA_PASSWD}
+      config-get auth-passwd64|base64 -d > ${CASSANDRA_PASSWD}
+      config-get auth-access64|base64 -d > ${CASSANDRA_ACCESS}
+      auth_opts="-Dpasswd.properties=${CASSANDRA_PASSWD} -Daccess.properties=${CASSANDRA_ACCESS}"
+      add_JVM_OPTS_line "Daccess.properties" "$auth_opts"
+      replace_YAML_key authenticator org.apache.cassandra.auth.SimpleAuthenticator
+  else
+      rm -f ${CASSANDRA_PASSWD} ${CASSANDRA_ACCESS}
+      del_JVM_OPTS_line "Daccess.properties"
+      replace_YAML_key authenticator org.apache.cassandra.auth.AllowAllAuthenticator
+  fi
+  local extra_jvm_opts=$(config-get extra-jvm-opts)
+  if [[ ${extra_jvm_opts} != "" ]];then
+      add_JVM_OPTS_line "JUJU_extra-jvm-opts" "$extra_jvm_opts"
+  else
+      del_JVM_OPTS_line "JUJU_extra-jvm-opts"
+  fi
+}
+
+# Remove JVM_OPTS line by regex
+del_JVM_OPTS_line() {
+  local regex="${1?}"
+  juju-log "Deleting from JVM_OPTS: key=${regex}"
+  sed -ri "\!^JVM_OPTS=.*${regex}!d" ${CASSANDRA_ENV} || true
+}
+
+# Add JVM_OPTS line, use regex remove it before, if already present
+add_JVM_OPTS_line() {
+  local regex="${1?}" line="${2?}"
+  del_JVM_OPTS_line "${regex}"
+  juju-log "Adding to JVM_OPTS: ${line} (key=${regex})"
+  echo "JVM_OPTS=\"\$JVM_OPTS ${line}\" ## ${regex} " >> ${CASSANDRA_ENV}
+}
+
+# Replace an *existent* YAML key: value
+# Note that key will be treated as a regex
+replace_YAML_key() {
+  local key="${1?}" value="${2?}"
+  juju-log "Replacing YAML: key=${key} value=${value}"
+  sed -ri -e "s!^(${key}): .*!\1: ${value}!" ${CASSANDRA_YML}
+}
+
+# Service Control Commands
+restart_cassandra () {
+  juju-log "Restarting Cassandra"
+  service cassandra status && service cassandra restart || :
+}
+
+start_cassandra() {
+  juju-log "Starting Cassandra"
+  service cassandra status || service cassandra start
+}
+
+stop_cassandra() {
+  juju-log "Stopping Cassandra"
+  service cassandra stop || :
+}
+
+setup_database_interface () {
+  juju-log "Setup Cassandra database interface"
+  relation-set port="$(config-get client-port)"
+}
+
+setup_jmx_interface () {
+  juju-log "Setup Cassandra JMX interface"
+  relation-set port="$(config-get jmx-port)"
+}
+
+reconfigure_cluster_seeds () {
+  juju-log "Reconfiguring cluster seeds"
+  seeds=$(get_seed_nodes)
+  IP=`get_private_ip`
+  if [ -z "${seeds}" ] && am_i_the_leader; then
+    juju-log "Configuring myself locally as a seed node"
+    sed -i -e "s/\- seeds:.*/\- seeds: \"${IP}\"/" ${CASSANDRA_YML}
+  else
+    juju-log "Setting seeds node to be ${seeds}"
+    sed -i -e "s/\- seeds:.*/\- seeds: \"${seeds}\"/" ${CASSANDRA_YML}
+  fi
+  juju-log "$JUJU_REMOTE_UNIT modified its settings or departed"
+  bzr_ci || :
+}
+
+nodestatus() {
+    local node_ip=$1
+    local VER=$(dpkg-query --show --showformat='${Version}' cassandra)
+    local MAJ=${VER%%.*}
+    local MIN_REL=${VER#*.}
+    local MIN=${MIN_REL%%.*}
+    local RING_COLS='$3$4'
+    if [ $MAJ == "0" ] || ([ $MAJ == "1" ] && [ $MIN == "0" ]); then 
+        # nodetool ring columns are different in 1.0 and lower
+        RING_COLS='$4$5'
+    fi
+    nodetool -h $node_ip ring 2>/dev/null | \
+        awk "/^$node_ip / {print $RING_COLS}" | \
+        tail -n1
+}
+
+running_nodes() {
+    local node_ip=$(get_private_ip)
+    nodetool -h $node_ip ring 2>/dev/null | \
+        awk '/Up *Normal/ {print $1}' | \
+        sort -u | \
+        paste -d " " -s
+}
+
+bootstrap () {
+  service cassandra status && return 0
+  seeds=$(get_seed_nodes)
+  if [ -n "${seeds}" ] || am_i_the_leader; then
+    start_cassandra
+    juju-log "Waiting for this node to join the cluster"
+    IP=`get_private_ip`
+    count=0
+    status="$(nodestatus $IP)"
+    while [ "${status}" != "UpNormal" ] && [ $count -lt 40 ]; do
+      sleep 30
+      status="$(nodestatus $IP)"
+      count=$((count + 1))
+      juju-log "Waited $((count * 30)) seconds so far...(nodestatus=${status})"
+    done
+    if [ $count -eq 40 ]; then
+      juju-log "Timed out waiting for node"
+      exit 2
+    fi
+    set_seed_nodes
+  fi
+}
+
+remove_down_nodes () {
+    set_seed_nodes
+}
+
+decommission_node () {
+  juju-log "Decommissioning node - this may take some time..."
+  nodetool -h $(get_private_ip) decommission
+}
+run_exec_d_hooks() {
+  local exec_hook=${1:?}
+  if [[ -d exec.d ]]; then
+    shopt -s nullglob
+    for f in exec.d/*/charm-${exec_hook}; do
+    [[ -x "$f" ]] || continue
+    ${SHELL} -c "$f"|| {
+        ## bail out if anyone fails
+        juju-log -l ERROR "$f: returned exit_status=$? "
+        exit 1
+    }
+    done
+  fi
+}
+
+update_nagios_checks() {
+  if [ -d "/usr/lib/nagios/plugins" ] && [ -d "/etc/nagios/nrpe.d" ]; then
+    IP=`get_private_ip`
+    install --owner=root --group=root --mode=0555 files/check_cassandra_heap.sh /usr/lib/nagios/plugins/check_cassandra_heap.sh
+    export NAGIOS_CONTEXT="$(config-get nagios_context)"
+    export NAGIOS_HOSTNAME="${NAGIOS_CONTEXT}-${JUJU_UNIT_NAME//\//-}"
+    export NAGIOS_SERVICEGROUP=${NAGIOS_CONTEXT}
+
+    export WARN_PCT="$(config-get nagios_heapchk_warn_pct)"
+    export CRIT_PCT="$(config-get nagios_heapchk_crit_pct)"
+    export SERVICE_DESCRIPTION="Cassandra server heap usage"
+    export NRPE_CMD_NAME="check_${NAGIOS_CONTEXT}_cassandra_heap"
+    export NRPE_CMD="/usr/lib/nagios/plugins/check_cassandra_heap.sh ${IP} ${WARN_PCT} ${CRIT_PCT}"
+    cheetah fill --env -p templates/nrpe_cmd_file.tmpl > /etc/nagios/nrpe.d/${NRPE_CMD_NAME}.cfg
+    cheetah fill --env -p templates/nrpe_service_file.tmpl > /var/lib/nagios/export/service__${NAGIOS_HOSTNAME}_${NRPE_CMD_NAME}.cfg
+  fi
+}
+
+# Check if units-to-update comma separated list contains my number, or "all",
+# returns 0 if this unit should be updated
+check_units_to_update() {
+  local unit
+  local units_to_update=$(config-get units-to-update)
+  local unitnum=${JUJU_UNIT_NAME##*/}
+  [[ $units_to_update == "all" ]] && return 0
+  (
+    OLDIFS="$IFS"
+    IFS=" ,"
+    for unit in ${units_to_update}; do
+      if [[ $unit == $unitnum ]];then
+        juju-log "check_units_to_update: \"${unitnum}\" in \"${units_to_update}\", updating."
+        exit 0
+      fi
+    done
+    juju-log "check_units_to_update: \"${unitnum}\" not in \"${units_to_update}\", skipping."
+    exit 1
+  )
+  return $?
+}
+
+hook_main() {
+local COMMAND="$1"
+export BZR_HOME=/root
+case $COMMAND in
+  install)
+    run_exec_d_hooks "pre-install"
+    # Install cassandra first run only
+    [[ -d /usr/share/cassandra ]] || install_cassandra
+    # Initialize /etc/cassandra bzr
+    bzr whoami "${JUJU_UNIT_NAME} <juju@${HOSTNAME}>"
+    test -d ${ETC_CASSANDRA}/.bzr || bzr init ${ETC_CASSANDRA} && bzr add ${ETC_CASSANDRA}
+    bzr_ci "main:${COMMAND}" ${ETC_CASSANDRA} || :
+    # Update the cassandra environment with the appropriate JMX port
+    configure_jmx_port 
+    bzr_ci || :
+    # Construct the cassandra.yaml file from the appropriate information above
+    configure_cassandra 
+    bzr_ci || :
+    run_exec_d_hooks "post-install"
+    ;;
+  config-changed)
+    needs_restart=
+    # Update the cassandra environment with the appropriate JMX port
+    configure_jmx_port 
+    bzr_ci && needs_restart=:
+    # Construct the cassandra.yaml file from the appropriate information above
+    configure_cassandra
+    bzr_ci && needs_restart=:
+    if [ $needs_restart ]; then
+      # Restart as required
+      restart_cassandra
+    fi
+    # Fill in nagios checks
+    update_nagios_checks
+    ;;
+  upgrade-charm)
+    check_units_to_update || exit 0
+    juju-log "Updating this charm - currently no-op"
+    ;;
+  stop)
+    stop_cassandra
+    ;;
+  start)
+    if [ "$(config-get allow-single-node)" == "True" ]; then
+        start_cassandra
+    fi
+    ;;
+  database-relation-joined)
+    setup_database_interface 
+    ;;
+  cluster-relation-joined)
+    juju-log "Joining cassandra cluster..."
+    ;;
+  cluster-relation-changed)
+    reconfigure_cluster_seeds
+    bootstrap
+    ;;
+  cluster-relation-departed)
+    reconfigure_cluster_seeds
+    remove_down_nodes
+    ;;
+  jmx-relation-joined)
+    setup_jmx_interface
+    ;;
+  nrpe-external-master-relation-changed)
+    update_nagios_checks
+    ;;
+  *)
+    juju-log "Command not recognised: $COMMAND"
+    ;;
+esac
+}
+# Actual processing, if not unittesting
+test -n "$CASSANDRA_TESTING" || hook_main ${0##*/}
