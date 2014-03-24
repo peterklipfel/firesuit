@@ -5,13 +5,7 @@ sudo add-apt-repository ppa:juju/stable
 sudo apt-get update
 sudo apt-get -y install juju-core lxc mongodb-server
 
-mkdir -p ~/charm/$codename
-mkdir -p ~/charm/precise
-git clone git@github.com:peterklipfel/storm_charm.git ~/charm/$codename/storm
-git clone git@github.com:peterklipfel/storm_charm.git ~/charm/precise/storm
-
-git clone git@github.com:peterklipfel/flask_charm.git ~/charm/precise/flask
-
+echo "preparing orchsetration environment"
 sed s/notsosecret/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ aws.yaml > tmp.yaml
 sed s/notsounique/`tr -dc "[:alpha:]" < /dev/urandom | head -c 30`/ tmp.yaml > uniquified.yaml
 rm tmp.yaml
@@ -25,3 +19,13 @@ rm tmp.yaml
 rm uniquified.yaml
 mkdir ~/.juju
 mv environments.yaml ~/.juju/environments.yaml
+
+echo "setting up firesuit"
+sudo ln -s `pwd`/lib/firesuit /usr/bin/firesuit
+
+echo "copying charms to local directory"
+cp -r `pwd`/charms/storm_charm/* ~/charm/precise/storm/
+cp -r `pwd`/charms/cassandra_charm/* ~/charm/precise/cassandra/
+cp -r `pwd`/charms/rabbitmq-server/* ~/charm/precise/rabbitmq/
+cp -r `pwd`/charms/flask_charm/* ~/charm/precise/flask/
+
