@@ -23,9 +23,6 @@ mv environments.yaml ~/.juju/environments.yaml
 echo "setting up firesuit"
 sudo ln -s `pwd`/lib/firesuit /usr/bin/firesuit
 
-echo "copying charms to local directory"
-cp -r `pwd`/charms/storm_charm/* ~/charm/precise/storm/
-cp -r `pwd`/charms/cassandra_charm/* ~/charm/precise/cassandra/
-cp -r `pwd`/charms/rabbitmq-server/* ~/charm/precise/rabbitmq/
-cp -r `pwd`/charms/flask_charm/* ~/charm/precise/flask/
+echo "generating ssh keys"
+ssh-keygen -t rsa -C "firesuit@master"
 
