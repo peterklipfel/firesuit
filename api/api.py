@@ -22,25 +22,33 @@ parser = reqparse.RequestParser()
 
 HOST = config['rabbitip']
 
+def is_json(myjson):
+  try:
+    json_object = json.loads(myjson)
+  except ValueError, e:
+    return False
+  return True
+
 @app.route('/', methods=['POST'])
 # @crossdomain(origin='*')
 def eatJson():
   try:
     if request.method == "POST":
       for blob in request.form:
-        connection = pika.BlockingConnection(
-          pika.ConnectionParameters(host=(HOST), port=5672))
-        channel = connection.channel()
-        channel.exchange_declare(exchange='direct_logs',
-                                 type='direct')
+        if is_json(blob):
+          connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=(HOST), port=5672))
+          channel = connection.channel()
+          channel.exchange_declare(exchange='direct_logs',
+                                   type='direct')
 
-        message = ' '.join(sys.argv[2:]) or '{"Hello": "World"}'
-        channel.basic_publish(exchange='stormExchange',
-                              routing_key="exclaimTopology",
-                              body=message)
-        # print " [x] Sent %r:%r" % (severity, message)
-        connection.close()
-
+          channel.basic_publish(exchange='stormExchange',
+                                routing_key="exclaimTopology",
+                                body=blob)
+          connection.close()
+        else:
+          return json.dumps({'ok' : False})
+    
       return json.dumps({'ok' : True})
     else:
       return json.dumps({'ok' : False})
