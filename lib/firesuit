@@ -109,11 +109,19 @@ case $1 in
     ;;
   bind-storm-external)
     juju add-relation stormmaster rabbitmq-server
-    juju add-relation stormworker rabbitmq-server
     juju add-relation stormmaster:database cassandra:database
     ;;
   bind-flask)
     juju add-relation rabbitmq-server flask
+    ;;
+  expand-storm)
+    juju add-unit stormworker
+    ;;
+  expand-rabbitmq)
+    juju add-unit rabbitmq
+    ;;
+  expand-cassandra)
+    juju add-unit cassandra
     ;;
   show-logs)
     env=`juju status | grep environment | cut -d ' ' -f2`
