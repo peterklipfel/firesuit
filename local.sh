@@ -21,9 +21,3 @@ mv environments.yaml ~/.juju/environments.yaml
 
 juju switch local
 
-echo "copying charms to local directory"
-cp -r charms/storm_charm/* ~/charm/precise/storm/
-cp -r charms/cassandra_charm/* ~/charm/precise/cassandra/
-cp -r charms/rabbitmq-server/* ~/charm/precise/rabbitmq/
-cp -r charms/flask_charm/* ~/charm/precise/flask/
-
