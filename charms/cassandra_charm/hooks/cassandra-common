@@ -358,6 +358,41 @@ add_JVM_OPTS_line() {
   echo "JVM_OPTS=\"\$JVM_OPTS ${line}\" ## ${regex} " >> ${CASSANDRA_ENV}
 }
 
+find_or_create_keyspace() {
+  if echo "select * from system.schema_keyspaces;" | cqlsh `hostname --ip-address` | grep -q "stormks" ; then
+    echo "keyspace exists"
+    juju-log "keyspace exists"
+  else
+    echo "building stormks keyspace"
+    juju-log "building stormks keyspace"
+    echo "CREATE KEYSPACE stormks WITH replication = {
+       'class': 'SimpleStrategy',
+       'replication_factor': '1'
+     };
+     
+     USE stormks;
+     
+     CREATE TABLE rawdata (
+       time decimal,
+       json text,
+       PRIMARY KEY (time)
+     ) WITH
+       bloom_filter_fp_chance=0.010000 AND
+       caching='KEYS_ONLY' AND
+       comment='' AND
+       dclocal_read_repair_chance=0.000000 AND
+       gc_grace_seconds=864000 AND
+       index_interval=128 AND
+       read_repair_chance=0.100000 AND
+       populate_io_cache_on_flush='false' AND
+       default_time_to_live=0 AND
+       speculative_retry='99.0PERCENTILE' AND
+       memtable_flush_period_in_ms=0 AND
+       compaction={'class': 'SizeTieredCompactionStrategy'} AND
+       compression={'sstable_compression': 'LZ4Compressor'};" | cqlsh `hostname --ip-address`
+  fi
+}
+
 # Replace an *existent* YAML key: value
 # Note that key will be treated as a regex
 replace_YAML_key() {
@@ -565,6 +600,7 @@ case $COMMAND in
     fi
     ;;
   database-relation-joined)
+    find_or_create_keyspace
     setup_database_interface 
     ;;
   cluster-relation-joined)
