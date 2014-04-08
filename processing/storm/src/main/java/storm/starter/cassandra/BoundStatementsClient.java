@@ -18,4 +18,15 @@ public class BoundStatementsClient extends SimpleClient {
             json) 
         );
     }
+
+    public void countWord(String word) {
+        // TODO: This hack is here because the "?" interpolation wasn't working
+        PreparedStatement statement = getSession().prepare(
+          "UPDATE stormks.wordcount " +
+           "SET counter_value = counter_value + 1 " +
+           "WHERE word='"+word+"';"
+        );
+        BoundStatement boundStatement = new BoundStatement(statement);
+        getSession().execute(boundStatement );
+    }
 }

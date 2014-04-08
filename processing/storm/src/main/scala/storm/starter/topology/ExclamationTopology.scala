@@ -8,10 +8,10 @@ import storm.starter.amqp._
 import storm.starter.spout._
 import storm.starter.cassandra._
 import storm.starter.config._
+import storm.starter.bolt.TokenizerBolt
 
 object ExclamationTopology {
   def main(args: Array[String]) {
-    import storm.starter.bolt.ExclamationBolt
 
     val builder: TopologyBuilder = new TopologyBuilder()
 
@@ -25,7 +25,8 @@ object ExclamationTopology {
 
     builder.setSpout("rabbitmq", new AMQPSpout(firesuitConf("rabbitip"), 5672, "guest", "guest", "/", new ExclusiveQueueWithBinding("stormExchange", "exclaimTopology"), new AMQPScheme()), 10)
     builder.setBolt("rawJSONtoCassandra", new CassandraRawStorer(firesuitConf("cassandraip")), 2).shuffleGrouping("rabbitmq")
-    builder.setBolt("exclaim", new ExclamationBolt(), 3).shuffleGrouping("rawJSONtoCassandra")
+    builder.setBolt("parsewords", new TokenizerBolt(), 3).shuffleGrouping("rawJSONtoCassandra")
+    builder.setBolt("storeWords", new CassandraCounterStorer(firesuitConf("cassandraip")), 9).shuffleGrouping("parsewords")
 
     val config = new Config()
     config.setDebug(true)
