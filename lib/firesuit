@@ -17,16 +17,16 @@ copy_local_charms (){
 
 deploy_storm () {
   juju deploy zookeeper
-  juju deploy -v --repository=/home/$USER/charm/ local:storm stormmaster
-  juju deploy -v --repository=/home/$USER/charm/ local:storm stormworker
+  juju deploy --repository=/home/$USER/charm/ local:precise/storm stormmaster
+  juju deploy --repository=/home/$USER/charm/ local:precise/storm stormworker
 }
 
 deploy_rabbitmq () {
-  juju deploy -v --repository=/home/$USER/charm/ local:rabbitmq-server  
+  juju deploy --repository=/home/$USER/charm/ local:precise/rabbitmq-server  
 }
 
 deploy_cassandra () {
-  juju deploy -v --repository=/home/$USER/charm/ local:cassandra
+  juju deploy --repository=/home/$USER/charm/ local:precise/cassandra
   juju add-unit cassandra
   env=`juju status | grep environment | cut -d ' ' -f2`
   if [[ $env != local ]]; then
@@ -35,7 +35,7 @@ deploy_cassandra () {
 }
 
 deploy_flask () {
-  juju deploy -v --repository=/home/$USER/charm/ local:flask
+  juju deploy --repository=/home/$USER/charm/ local:precise/flask
 }
 
 show_commands() {
