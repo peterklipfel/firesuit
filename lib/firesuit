@@ -134,9 +134,9 @@ case $1 in
   destroy-all)
     env=`juju status | grep environment | cut -d ' ' -f2`
     if [[ $env == local ]]; then
-      sudo juju destroy-environment
+      sudo juju destroy-environment local
     else
-      juju destroy-environment
+      juju destroy-environment amazon
     fi
     ;;
   *)
